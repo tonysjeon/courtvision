@@ -16,6 +16,7 @@ from courtvision.geometry.mapper import CourtMapper
 from courtvision.pipeline import PlayerTrackingPipeline
 from courtvision.players.yolo import YoloPersonDetector
 from courtvision.tracking.ball_tracker import BallTracker
+from courtvision.tracking.trajectory import TrajectoryFrame, smooth_ball_trajectory
 from courtvision.video.reader import VideoReader
 from courtvision.visualization.court import render_calibration_preview
 from courtvision.visualization.tracking import render_tracking_preview
@@ -99,12 +100,34 @@ def track_players(args: argparse.Namespace) -> int:
     args.output_video.parent.mkdir(parents=True, exist_ok=True)
     args.output_events.parent.mkdir(parents=True, exist_ok=True)
     writer: cv2.VideoWriter | None = None
+    results = []
+    timeline = []
     frame_count = 0
     event_count = 0
     ball_observation_count = 0
     interpolated_ball_count = 0
     ball_trail = deque(maxlen=32)
     started_at = perf_counter()
+
+    with VideoReader(
+        args.video,
+        frame_skip=args.frame_skip,
+        max_frames=args.max_frames,
+        start_timestamp_ms=args.start_ms,
+        end_timestamp_ms=args.end_ms,
+    ) as reader:
+        output_fps = reader.metadata.fps / (args.frame_skip + 1)
+        for frame in reader:
+            results.append(pipeline.process(frame))
+            timeline.append(TrajectoryFrame(frame.frame_id, frame.timestamp_ms))
+    if not results:
+        raise RuntimeError("No frames were available in the requested video range")
+
+    ball_events = smooth_ball_trajectory(
+        timeline,
+        [result.ball_event for result in results],
+        mapper,
+    )
 
     try:
         with (
@@ -117,17 +140,15 @@ def track_players(args: argparse.Namespace) -> int:
             ) as reader,
             args.output_events.open("w", encoding="utf-8") as events_file,
         ):
-            output_fps = reader.metadata.fps / (args.frame_skip + 1)
-            for frame in reader:
-                result = pipeline.process(frame)
-                if result.ball_event is not None:
-                    ball_trail.append(result.ball_event)
+            for frame, result, ball_event in zip(reader, results, ball_events, strict=True):
+                if ball_event is not None:
+                    ball_trail.append(ball_event)
                 preview = render_tracking_preview(
                     frame.image,
                     result.candidates,
                     result.events,
                     timestamp_ms=frame.timestamp_ms,
-                    ball_event=result.ball_event,
+                    ball_event=ball_event,
                     ball_trail=ball_trail,
                 )
                 if writer is None:
@@ -143,15 +164,13 @@ def track_players(args: argparse.Namespace) -> int:
                 writer.write(preview)
                 for event in result.events:
                     events_file.write(event.model_dump_json() + "\n")
-                if result.ball_event is not None:
-                    events_file.write(result.ball_event.model_dump_json() + "\n")
+                if ball_event is not None:
+                    events_file.write(ball_event.model_dump_json() + "\n")
                     event_count += 1
                     ball_observation_count += 1
-                    interpolated_ball_count += int(result.ball_event.is_interpolated)
+                    interpolated_ball_count += int(ball_event.is_interpolated)
                 frame_count += 1
                 event_count += len(result.events)
-            if frame_count == 0:
-                raise RuntimeError("No frames were available in the requested video range")
     finally:
         if writer is not None:
             writer.release()
