@@ -4,7 +4,12 @@ from courtvision.court.calibration import CourtCalibration
 from courtvision.geometry.mapper import CourtMapper
 from courtvision.players.detection import BoundingBox, PersonDetection
 from courtvision.players.filtering import PlayerCandidate
-from courtvision.tracking.events import CourtPosition, PixelPosition, PlayerTrackingEvent
+from courtvision.tracking.events import (
+    BallTrackingEvent,
+    CourtPosition,
+    PixelPosition,
+    PlayerTrackingEvent,
+)
 from courtvision.visualization.court import (
     COURT_COLOR,
     SURROUND_COLOR,
@@ -108,3 +113,26 @@ def test_renders_player_tracking_preview() -> None:
 
     assert preview.shape == (450, 900, 3)
     assert np.any(preview != 0)
+
+
+def test_uses_same_ball_marker_for_observed_and_estimated_positions() -> None:
+    frame = np.zeros((450, 600, 3), dtype=np.uint8)
+    event = BallTrackingEvent(
+        match_id="demo",
+        frame_id=1,
+        timestamp_ms=40,
+        confidence=0.8,
+        pixel_position=PixelPosition(x=275, y=225),
+        court_position=CourtPosition(x=50, y=50),
+    )
+
+    observed = render_tracking_preview(frame, {}, [], timestamp_ms=40, ball_event=event)
+    estimated = render_tracking_preview(
+        frame,
+        {},
+        [],
+        timestamp_ms=40,
+        ball_event=event.model_copy(update={"is_interpolated": True}),
+    )
+
+    assert np.array_equal(observed, estimated)

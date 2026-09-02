@@ -22,6 +22,7 @@ PLAYER_LABELS: dict[PlayerId, str] = {
 OUTLINE_COLOR = (25, 25, 25)
 LABEL_TEXT_COLOR = (255, 255, 255)
 BALL_COLOR = (35, 255, 190)
+BALL_SEAM_COLOR = (225, 255, 245)
 
 
 def _draw_rounded_rectangle(
@@ -86,6 +87,41 @@ def _draw_label(
     )
 
 
+def _draw_tennis_ball(
+    image: np.ndarray,
+    center: tuple[int, int],
+    radius: int,
+) -> None:
+    """Draw one consistent tennis-ball marker for every tracked position."""
+    cv2.circle(image, center, radius + 2, OUTLINE_COLOR, -1, cv2.LINE_AA)
+    cv2.circle(image, center, radius, BALL_COLOR, -1, cv2.LINE_AA)
+    seam_radius = max(2, radius)
+    seam_offset = max(1, radius // 2)
+    seam_thickness = max(1, radius // 5)
+    cv2.ellipse(
+        image,
+        (center[0] - seam_offset, center[1]),
+        (seam_radius, seam_radius),
+        0,
+        -55,
+        55,
+        BALL_SEAM_COLOR,
+        seam_thickness,
+        cv2.LINE_AA,
+    )
+    cv2.ellipse(
+        image,
+        (center[0] + seam_offset, center[1]),
+        (seam_radius, seam_radius),
+        180,
+        -55,
+        55,
+        BALL_SEAM_COLOR,
+        seam_thickness,
+        cv2.LINE_AA,
+    )
+
+
 def render_tracking_preview(
     frame: np.ndarray,
     candidates: dict[PlayerId, PlayerCandidate],
@@ -143,19 +179,10 @@ def render_tracking_preview(
     if ball_event is not None:
         ball_x = round(ball_event.pixel_position.x)
         ball_y = round(ball_event.pixel_position.y)
-        cv2.circle(annotated, (ball_x, ball_y), 10, OUTLINE_COLOR, -1, cv2.LINE_AA)
-        ball_thickness = 2 if ball_event.is_interpolated else -1
-        cv2.circle(
-            annotated,
-            (ball_x, ball_y),
-            7,
-            BALL_COLOR,
-            ball_thickness,
-            cv2.LINE_AA,
-        )
+        _draw_tennis_ball(annotated, (ball_x, ball_y), 7)
         _draw_label(
             annotated,
-            "Ball" if not ball_event.is_interpolated else "Ball · estimated",
+            "Ball",
             (ball_x + 14, ball_y + 5),
             font_scale=0.48,
         )
@@ -212,10 +239,7 @@ def render_tracking_preview(
             court.shape[1],
             court.shape[0],
         )
-        cv2.circle(court, (ball_x, ball_y), 15, OUTLINE_COLOR, -1, cv2.LINE_AA)
-        ball_thickness = 2 if ball_event.is_interpolated else -1
-        cv2.circle(court, (ball_x, ball_y), 11, BALL_COLOR, ball_thickness, cv2.LINE_AA)
-        ball_label = "Ball est." if ball_event.is_interpolated else "Ball"
-        _draw_label(court, ball_label, (ball_x + 20, ball_y), font_scale=0.48, pill_height=24)
+        _draw_tennis_ball(court, (ball_x, ball_y), 11)
+        _draw_label(court, "Ball", (ball_x + 20, ball_y), font_scale=0.48, pill_height=24)
 
     return np.hstack((annotated, court))
