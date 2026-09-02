@@ -1,16 +1,15 @@
 # CourtVision
 
-CourtVision turns recorded singles tennis footage into normalized court positions and,
-eventually, tactical analytics. This repository currently contains the first vertical slice:
-video ingestion, manual court calibration, homography, and a visual calibration preview.
+CourtVision maps points from recorded tennis footage onto a normalized court.
 
-The complete V1 plan is documented in [docs/V1_SCOPE.md](docs/V1_SCOPE.md).
+Right now, the project can read MP4 and MOV files, load four manually selected court corners,
+calculate a homography, and generate a side-by-side calibration preview.
 
 ## Requirements
 
 - Python 3.11 through 3.14
 - [uv](https://docs.astral.sh/uv/)
-- An MP4 or MOV tennis clip recorded from a standard broadcast-style camera
+- An MP4 or MOV tennis clip
 
 ## Setup
 
@@ -20,7 +19,7 @@ make lint
 make test
 ```
 
-## Generate a calibration preview
+## Try it
 
 1. Put a local clip at `data/sample/sample.mp4`.
 2. Copy `data/sample/calibration.example.json` to `data/sample/calibration.json`.
@@ -31,9 +30,8 @@ make test
 make process-video
 ```
 
-The command writes `data/processed/court_preview.png`. The left side shows the source frame
-and selected court polygon; the right side shows the normalized court. Local videos,
-calibration files, and generated previews are intentionally ignored by Git.
+The preview is written to `data/processed/court_preview.png`. Videos, local calibration files,
+and generated output in these directories are ignored by Git.
 
 To use different paths or a different starting time:
 
@@ -45,7 +43,7 @@ uv run courtvision process-video \
   --start-ms 5000
 ```
 
-## Current package layout
+## Layout
 
 ```text
 services/vision/src/courtvision/
@@ -54,6 +52,3 @@ services/vision/src/courtvision/
 ├── video/           # timestamp-aware frame ingestion
 └── visualization/   # normalized court and calibration previews
 ```
-
-The vision package runs without Kafka, Spark, Snowflake, or the frontend. Those integrations
-will be introduced as later vertical slices after court mapping and player tracking are stable.

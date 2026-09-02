@@ -9,6 +9,9 @@ dist/
 build/
 *.egg-info/
 
+# Local planning notes
+docs/V1_SCOPE.md
+
 # Local inputs and generated artifacts
 data/sample/*
 !data/sample/.gitkeep
