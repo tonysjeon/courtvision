@@ -257,6 +257,7 @@ dependencies = [
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "opencv-python" },
     { name = "pydantic" },
+    { name = "torch" },
     { name = "ultralytics" },
 ]
 
@@ -272,6 +273,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0,<3" },
     { name = "opencv-python", specifier = ">=4.10,<6" },
     { name = "pydantic", specifier = ">=2.9,<3" },
+    { name = "torch", specifier = ">=2.2,<3" },
     { name = "ultralytics", specifier = ">=8.3,<9" },
 ]
 

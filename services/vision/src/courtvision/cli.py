@@ -10,7 +10,7 @@ from time import perf_counter
 
 import cv2
 
-from courtvision.ball.motion import MotionBallDetector
+from courtvision.ball.tracknet import TrackNetBallDetector
 from courtvision.court.calibration import CourtCalibration
 from courtvision.geometry.mapper import CourtMapper
 from courtvision.pipeline import PlayerTrackingPipeline
@@ -44,8 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     track.add_argument("--output-events", type=Path, required=True)
     track.add_argument("--match-id", default="local_match")
     track.add_argument("--model", default="yolo11n.pt")
+    track.add_argument("--ball-model", type=Path, default=Path("models/tracknet-tennis.pt"))
     track.add_argument("--confidence", type=float, default=0.20)
     track.add_argument("--device")
+    track.add_argument("--ball-device")
     track.add_argument("--frame-skip", type=int, default=0)
     track.add_argument("--max-frames", type=int)
     track.add_argument("--start-ms", type=float, default=0.0)
@@ -90,7 +92,7 @@ def track_players(args: argparse.Namespace) -> int:
         match_id=args.match_id,
         detector=detector,
         mapper=mapper,
-        ball_detector=MotionBallDetector(mapper),
+        ball_detector=TrackNetBallDetector(args.ball_model, device=args.ball_device),
         ball_tracker=BallTracker(mapper),
     )
 

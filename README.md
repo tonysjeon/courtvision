@@ -35,6 +35,10 @@ and generated output in these directories are ignored by Git.
 
 To track the players and ball:
 
+Download the TrackNet tennis weights to `models/tracknet-tennis.pt` from
+[Hugging Face](https://huggingface.co/vishnushenoy09/tracknet-v1-tennis/blob/main/model_best.pt),
+then run:
+
 ```bash
 make track-video VIDEO=data/sample/sample.mov
 ```
