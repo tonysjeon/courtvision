@@ -28,8 +28,10 @@ class PlayerTracker:
         max_missing_frames: int = 30,
         max_displacement_per_frame: float = 8.0,
         far_max_vertical_displacement_per_frame: float = 20.0,
-        far_player_smoothing: float = 0.45,
-        far_player_vertical_smoothing: float = 0.18,
+        near_player_smoothing: float = 0.35,
+        near_player_vertical_smoothing: float = 0.08,
+        far_player_smoothing: float = 0.35,
+        far_player_vertical_smoothing: float = 0.05,
     ) -> None:
         if max_missing_frames < 0:
             raise ValueError("max_missing_frames must be non-negative")
@@ -41,9 +43,15 @@ class PlayerTracker:
             raise ValueError("far_player_smoothing must be greater than 0 and at most 1")
         if not 0 < far_player_vertical_smoothing <= 1:
             raise ValueError("far_player_vertical_smoothing must be greater than 0 and at most 1")
+        if not 0 < near_player_smoothing <= 1:
+            raise ValueError("near_player_smoothing must be greater than 0 and at most 1")
+        if not 0 < near_player_vertical_smoothing <= 1:
+            raise ValueError("near_player_vertical_smoothing must be greater than 0 and at most 1")
         self.max_missing_frames = max_missing_frames
         self.max_displacement_per_frame = max_displacement_per_frame
         self.far_max_vertical_displacement_per_frame = far_max_vertical_displacement_per_frame
+        self.near_player_smoothing = near_player_smoothing
+        self.near_player_vertical_smoothing = near_player_vertical_smoothing
         self.far_player_smoothing = far_player_smoothing
         self.far_player_vertical_smoothing = far_player_vertical_smoothing
         self._states: dict[PlayerId, _TrackState] = {}
@@ -91,8 +99,12 @@ class PlayerTracker:
                         candidate.court_y - state.court_y
                     )
                 else:
-                    state.court_x = candidate.court_x
-                    state.court_y = candidate.court_y
+                    state.court_x += self.near_player_smoothing * (
+                        candidate.court_x - state.court_x
+                    )
+                    state.court_y += self.near_player_vertical_smoothing * (
+                        candidate.court_y - state.court_y
+                    )
 
             events.append(
                 PlayerTrackingEvent(

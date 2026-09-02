@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import deque
 from pathlib import Path
 from time import perf_counter
 
@@ -100,6 +101,7 @@ def track_players(args: argparse.Namespace) -> int:
     event_count = 0
     ball_observation_count = 0
     interpolated_ball_count = 0
+    ball_trail = deque(maxlen=32)
     started_at = perf_counter()
 
     try:
@@ -116,12 +118,15 @@ def track_players(args: argparse.Namespace) -> int:
             output_fps = reader.metadata.fps / (args.frame_skip + 1)
             for frame in reader:
                 result = pipeline.process(frame)
+                if result.ball_event is not None:
+                    ball_trail.append(result.ball_event)
                 preview = render_tracking_preview(
                     frame.image,
                     result.candidates,
                     result.events,
                     timestamp_ms=frame.timestamp_ms,
                     ball_event=result.ball_event,
+                    ball_trail=ball_trail,
                 )
                 if writer is None:
                     height, width = preview.shape[:2]

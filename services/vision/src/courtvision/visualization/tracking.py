@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import cv2
 import numpy as np
 
@@ -91,6 +93,7 @@ def render_tracking_preview(
     *,
     timestamp_ms: float,
     ball_event: BallTrackingEvent | None = None,
+    ball_trail: Sequence[BallTrackingEvent] = (),
 ) -> np.ndarray:
     annotated = frame.copy()
     event_by_player = {event.object_id: event for event in events}
@@ -168,6 +171,22 @@ def render_tracking_preview(
     )
 
     court = render_normalized_court(width=max(300, frame.shape[1] // 2), height=frame.shape[0])
+    for trail_event in ball_trail:
+        age_ms = timestamp_ms - trail_event.timestamp_ms
+        if not 0 <= age_ms <= 450:
+            continue
+        trail_x, trail_y = court_position_to_canvas(
+            trail_event.court_position.x,
+            trail_event.court_position.y,
+            court.shape[1],
+            court.shape[0],
+        )
+        strength = 1 - age_ms / 450
+        radius = max(2, round(5 * strength))
+        overlay = court.copy()
+        cv2.circle(overlay, (trail_x, trail_y), radius, BALL_COLOR, -1, cv2.LINE_AA)
+        cv2.addWeighted(overlay, 0.2 + strength * 0.35, court, 0.8 - strength * 0.35, 0, court)
+
     for event in events:
         color = PLAYER_COLORS[event.object_id]
         x, y = court_position_to_canvas(
@@ -193,10 +212,10 @@ def render_tracking_preview(
             court.shape[1],
             court.shape[0],
         )
-        cv2.circle(court, (ball_x, ball_y), 10, OUTLINE_COLOR, -1, cv2.LINE_AA)
+        cv2.circle(court, (ball_x, ball_y), 15, OUTLINE_COLOR, -1, cv2.LINE_AA)
         ball_thickness = 2 if ball_event.is_interpolated else -1
-        cv2.circle(court, (ball_x, ball_y), 7, BALL_COLOR, ball_thickness, cv2.LINE_AA)
+        cv2.circle(court, (ball_x, ball_y), 11, BALL_COLOR, ball_thickness, cv2.LINE_AA)
         ball_label = "Ball est." if ball_event.is_interpolated else "Ball"
-        _draw_label(court, ball_label, (ball_x + 15, ball_y), font_scale=0.44, pill_height=20)
+        _draw_label(court, ball_label, (ball_x + 20, ball_y), font_scale=0.48, pill_height=24)
 
     return np.hstack((annotated, court))

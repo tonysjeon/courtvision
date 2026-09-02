@@ -91,9 +91,11 @@ def test_does_not_offer_stale_position_to_selector() -> None:
     assert tracker.previous_positions(4) == {}
 
 
-def test_smooths_far_player_position_without_changing_near_player_position() -> None:
+def test_smooths_player_positions_with_stronger_vertical_damping() -> None:
     tracker = PlayerTracker(
         max_displacement_per_frame=20,
+        near_player_smoothing=0.5,
+        near_player_vertical_smoothing=0.2,
         far_player_smoothing=0.5,
         far_player_vertical_smoothing=0.2,
     )
@@ -118,8 +120,8 @@ def test_smooths_far_player_position_without_changing_near_player_position() -> 
     )
     by_player = {event.object_id: event for event in events}
 
-    assert by_player["near_player"].court_position.x == 50
-    assert by_player["near_player"].court_position.y == 20
+    assert by_player["near_player"].court_position.x == 45
+    assert by_player["near_player"].court_position.y == 12
     assert by_player["far_player"].court_position.x == 45
     assert by_player["far_player"].court_position.y == 88
 
