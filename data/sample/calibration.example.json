@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "video": "sample.mp4",
+  "keypoints": {
+    "near_left_baseline": {"x": 155, "y": 692},
+    "near_right_baseline": {"x": 1065, "y": 692},
+    "far_left_baseline": {"x": 415, "y": 242},
+    "far_right_baseline": {"x": 809, "y": 242}
+  }
+}

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "courtvision"
+version = "0.1.0"
+description = "Tennis video tracking and tactical analytics"
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "numpy>=2.0,<3",
+  "opencv-python-headless>=4.10,<5",
+  "pydantic>=2.9,<3",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+courtvision = "courtvision.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["services/vision/src/courtvision"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=courtvision --cov-report=term-missing --strict-markers"
+testpaths = ["services/vision/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

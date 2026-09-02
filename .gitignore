@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local planning notes
+docs/V1_SCOPE.md
+
+# Local inputs and generated artifacts
+data/sample/*
+!data/sample/.gitkeep
+!data/sample/calibration.example.json
+data/processed/*
+!data/processed/.gitkeep
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
