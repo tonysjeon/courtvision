@@ -127,6 +127,7 @@ def track_players(args: argparse.Namespace) -> int:
         timeline,
         [result.ball_event for result in results],
         mapper,
+        player_events=[result.events for result in results],
     )
 
     try:

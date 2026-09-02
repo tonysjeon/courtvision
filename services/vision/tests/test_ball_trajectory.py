@@ -1,6 +1,11 @@
 import numpy as np
 from courtvision.geometry.mapper import CourtMapper
-from courtvision.tracking.events import BallTrackingEvent, CourtPosition, PixelPosition
+from courtvision.tracking.events import (
+    BallTrackingEvent,
+    CourtPosition,
+    PixelPosition,
+    PlayerTrackingEvent,
+)
 from courtvision.tracking.trajectory import TrajectoryFrame, smooth_ball_trajectory
 
 
@@ -10,6 +15,19 @@ def event(frame_id: int, x: float, y: float, confidence: float = 0.9) -> BallTra
         frame_id=frame_id,
         timestamp_ms=frame_id * 40,
         confidence=confidence,
+        pixel_position=PixelPosition(x=x, y=y),
+        court_position=CourtPosition(x=x, y=y),
+    )
+
+
+def player_event(frame_id: int, object_id: str, x: float, y: float) -> PlayerTrackingEvent:
+    return PlayerTrackingEvent(
+        match_id="match",
+        frame_id=frame_id,
+        timestamp_ms=frame_id * 40,
+        object_id=object_id,
+        track_id=1 if object_id == "near_player" else 2,
+        confidence=0.9,
         pixel_position=PixelPosition(x=x, y=y),
         court_position=CourtPosition(x=x, y=y),
     )
@@ -58,3 +76,33 @@ def test_smooths_noisy_observed_coordinates() -> None:
     middle = result[2]
     assert middle is not None
     assert middle.pixel_position.y < 26
+
+
+def test_ground_projection_ignores_airborne_depth_reversal() -> None:
+    frames = [TrajectoryFrame(index, index * 40) for index in range(7)]
+    events = [
+        event(0, 50, 100),
+        event(1, 50, 130),
+        event(2, 50, 70),
+        event(3, 50, 5),
+        event(4, 50, -20),
+        event(5, 50, 30),
+        event(6, 50, 0),
+    ]
+    players = [
+        [
+            player_event(index, "far_player", 50, 100),
+            player_event(index, "near_player", 50, 0),
+        ]
+        for index in range(7)
+    ]
+
+    result = smooth_ball_trajectory(
+        frames,
+        events,
+        CourtMapper(np.eye(3)),
+        player_events=players,
+    )
+
+    court_depths = [item.court_position.y for item in result if item is not None]
+    assert all(left >= right for left, right in zip(court_depths, court_depths[1:], strict=False))

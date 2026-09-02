@@ -8,7 +8,12 @@ from typing import NamedTuple
 import numpy as np
 
 from courtvision.geometry.mapper import CourtMapper
-from courtvision.tracking.events import BallTrackingEvent, CourtPosition, PixelPosition
+from courtvision.tracking.events import (
+    BallTrackingEvent,
+    CourtPosition,
+    PixelPosition,
+    PlayerTrackingEvent,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +35,7 @@ def smooth_ball_trajectory(
     events: list[BallTrackingEvent | None],
     mapper: CourtMapper,
     *,
+    player_events: list[list[PlayerTrackingEvent]] | None = None,
     max_anchor_gap_ms: float = 600.0,
     acceleration_noise: float = 3500.0,
 ) -> list[BallTrackingEvent | None]:
@@ -66,6 +72,10 @@ def smooth_ball_trajectory(
             acceleration_noise=acceleration_noise,
         )
         segment_start = anchor_offset
+    if player_events is not None:
+        if len(player_events) != len(frames):
+            raise ValueError("player_events and frames must have the same length")
+        _apply_ground_projection(frames, output, player_events)
     return output
 
 
@@ -221,3 +231,147 @@ def _interpolated_confidence(index: int, anchors: dict[int, float]) -> float:
     distance = min(abs(anchor - index) for anchor in neighbors)
     confidence = min(anchors[anchor] for anchor in neighbors)
     return max(0.05, confidence * (0.92**distance))
+
+
+def _apply_ground_projection(
+    frames: list[TrajectoryFrame],
+    ball_events: list[BallTrackingEvent | None],
+    player_events: list[list[PlayerTrackingEvent]],
+) -> None:
+    """Separate apparent ball height from its top-down ground movement."""
+    segment_start = None
+    for index in range(len(ball_events) + 1):
+        has_ball = index < len(ball_events) and ball_events[index] is not None
+        if has_ball and segment_start is None:
+            segment_start = index
+        if not has_ball and segment_start is not None:
+            _project_segment_to_ground(
+                frames,
+                ball_events,
+                player_events,
+                segment_start,
+                index - 1,
+            )
+            segment_start = None
+
+
+def _project_segment_to_ground(
+    frames: list[TrajectoryFrame],
+    ball_events: list[BallTrackingEvent | None],
+    player_events: list[list[PlayerTrackingEvent]],
+    start: int,
+    end: int,
+) -> None:
+    visits = _side_visits(frames, ball_events, start, end)
+    anchors = [
+        anchor
+        for visit in visits
+        if (anchor := _contact_anchor(visit, ball_events, player_events)) is not None
+    ]
+    if len(anchors) < 2:
+        return
+
+    anchors = _alternating_anchors(anchors)
+    if len(anchors) < 2:
+        return
+
+    for left, right in zip(anchors, anchors[1:], strict=False):
+        left_index, _, left_position = left
+        right_index, _, right_position = right
+        duration = max(
+            1.0,
+            frames[right_index].timestamp_ms - frames[left_index].timestamp_ms,
+        )
+        for index in range(left_index, right_index + 1):
+            event = ball_events[index]
+            if event is None:
+                continue
+            progress = (frames[index].timestamp_ms - frames[left_index].timestamp_ms) / duration
+            court_x = left_position.x + progress * (right_position.x - left_position.x)
+            court_y = left_position.y + progress * (right_position.y - left_position.y)
+            ball_events[index] = event.model_copy(
+                update={"court_position": CourtPosition(x=court_x, y=court_y)}
+            )
+
+    first_index, _, first_position = anchors[0]
+    for index in range(start, first_index):
+        event = ball_events[index]
+        if event is not None:
+            ball_events[index] = event.model_copy(update={"court_position": first_position})
+    last_index, _, last_position = anchors[-1]
+    for index in range(last_index + 1, end + 1):
+        event = ball_events[index]
+        if event is not None:
+            ball_events[index] = event.model_copy(update={"court_position": last_position})
+
+
+def _side_visits(
+    frames: list[TrajectoryFrame],
+    ball_events: list[BallTrackingEvent | None],
+    start: int,
+    end: int,
+) -> list[tuple[str, list[int]]]:
+    visits: list[tuple[str, list[int]]] = []
+    for index in range(start, end + 1):
+        event = ball_events[index]
+        if event is None:
+            continue
+        if event.court_position.y <= 25:
+            side = "near_player"
+        elif event.court_position.y >= 75:
+            side = "far_player"
+        else:
+            continue
+        if (
+            visits
+            and visits[-1][0] == side
+            and frames[index].timestamp_ms - frames[visits[-1][1][-1]].timestamp_ms <= 800
+        ):
+            visits[-1][1].append(index)
+        else:
+            visits.append((side, [index]))
+    return visits
+
+
+def _contact_anchor(
+    visit: tuple[str, list[int]],
+    ball_events: list[BallTrackingEvent | None],
+    player_events: list[list[PlayerTrackingEvent]],
+) -> tuple[int, str, CourtPosition] | None:
+    side, indices = visit
+    candidates = []
+    for index in indices:
+        ball = ball_events[index]
+        if ball is None:
+            continue
+        player = next((event for event in player_events[index] if event.object_id == side), None)
+        if player is None:
+            continue
+        distance = np.hypot(
+            ball.pixel_position.x - player.pixel_position.x,
+            ball.pixel_position.y - player.pixel_position.y,
+        )
+        candidates.append((distance, index, player))
+    if not candidates:
+        return None
+    _, index, player = min(candidates, key=lambda candidate: candidate[0])
+    # Player positions provide the best single-camera estimate of the ball's
+    # ground location at racket contact. Keep a small amount of the ball's
+    # apparent lateral position so wide contact points are still visible.
+    ball = ball_events[index]
+    assert ball is not None
+    court_x = 0.75 * player.court_position.x + 0.25 * ball.court_position.x
+    court_y = float(np.clip(player.court_position.y, -12.0, 112.0))
+    return index, side, CourtPosition(x=court_x, y=court_y)
+
+
+def _alternating_anchors(
+    anchors: list[tuple[int, str, CourtPosition]],
+) -> list[tuple[int, str, CourtPosition]]:
+    output = []
+    for anchor in sorted(anchors, key=lambda item: item[0]):
+        if output and output[-1][1] == anchor[1]:
+            output[-1] = anchor
+        else:
+            output.append(anchor)
+    return output
