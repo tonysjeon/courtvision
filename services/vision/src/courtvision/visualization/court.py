@@ -153,7 +153,9 @@ def render_calibration_preview(
 ) -> np.ndarray:
     """Place an annotated source frame beside its normalized court."""
     annotated = frame.copy()
-    points = np.asarray(calibration.keypoints.ordered_points(), dtype=np.int32)
+    frame_height, frame_width = frame.shape[:2]
+    scaled_points = calibration.ordered_points_for_frame(frame_width, frame_height)
+    points = np.asarray(scaled_points, dtype=np.int32)
     polygon = points[[0, 1, 3, 2]].reshape((-1, 1, 2))
     cv2.polylines(annotated, [polygon], True, (0, 255, 255), 3, cv2.LINE_AA)
 
@@ -172,7 +174,7 @@ def render_calibration_preview(
         )
 
     court = render_normalized_court(width=max(300, frame.shape[1] // 2), height=frame.shape[0])
-    for source in calibration.keypoints.ordered_points():
+    for source in scaled_points:
         court_x, court_y = mapper.transform(*source)
         px, py = court_position_to_canvas(
             court_x,

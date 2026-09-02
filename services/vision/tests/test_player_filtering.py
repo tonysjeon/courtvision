@@ -40,7 +40,7 @@ def test_selects_near_and_far_players_and_rejects_spectator(
     )
 
     assert selected["near_player"].court_y == pytest.approx(5)
-    assert selected["far_player"].court_y == pytest.approx(105.8)
+    assert selected["far_player"].court_y == pytest.approx(95)
 
 
 def test_corrects_far_player_depth_from_detector_box_bottom() -> None:

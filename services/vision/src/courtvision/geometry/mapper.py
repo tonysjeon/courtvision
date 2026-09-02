@@ -26,8 +26,17 @@ class CourtMapper:
         self.court_to_image = np.linalg.inv(matrix)
 
     @classmethod
-    def from_calibration(cls, calibration: CourtCalibration) -> CourtMapper:
-        source = np.asarray(calibration.keypoints.ordered_points(), dtype=np.float32)
+    def from_calibration(
+        cls,
+        calibration: CourtCalibration,
+        *,
+        frame_width: int | None = None,
+        frame_height: int | None = None,
+    ) -> CourtMapper:
+        source = np.asarray(
+            calibration.ordered_points_for_frame(frame_width, frame_height),
+            dtype=np.float32,
+        )
         polygon = source[[0, 1, 3, 2]]
         if abs(cv2.contourArea(polygon)) < 1.0:
             raise ValueError("Calibration points do not define a usable court area")

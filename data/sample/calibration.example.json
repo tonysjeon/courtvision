@@ -1,6 +1,8 @@
 {
   "schema_version": "1.0",
   "video": "sample.mp4",
+  "frame_width": 1280,
+  "frame_height": 720,
   "keypoints": {
     "near_left_baseline": {"x": 155, "y": 692},
     "near_right_baseline": {"x": 1065, "y": 692},

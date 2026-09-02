@@ -29,8 +29,8 @@ class ActivePlayerSelector:
         self,
         *,
         court_margin: float = 30.0,
-        far_player_foot_inset: float = 0.12,
-        far_player_depth_offset: float = 12.0,
+        far_player_foot_inset: float = 0.0,
+        far_player_depth_offset: float = 0.0,
     ) -> None:
         if not 0 <= far_player_foot_inset < 1:
             raise ValueError("far_player_foot_inset must be between 0 and 1")

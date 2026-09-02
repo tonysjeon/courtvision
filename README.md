@@ -23,7 +23,8 @@ make test
 
 1. Put a local clip at `data/sample/sample.mp4`.
 2. Copy `data/sample/calibration.example.json` to `data/sample/calibration.json`.
-3. Update the four pixel coordinates for the visible singles-court baseline corners.
+3. Set the clip's frame width and height, then update the four pixel coordinates for the
+   visible singles-court baseline corners.
 4. Run:
 
 ```bash

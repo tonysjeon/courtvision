@@ -58,9 +58,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def process_video(args: argparse.Namespace) -> int:
     calibration = CourtCalibration.from_json(args.calibration)
-    mapper = CourtMapper.from_calibration(calibration)
 
     with VideoReader(args.video, start_timestamp_ms=args.start_ms, max_frames=1) as reader:
+        mapper = CourtMapper.from_calibration(
+            calibration,
+            frame_width=reader.metadata.width,
+            frame_height=reader.metadata.height,
+        )
         frame = next(iter(reader), None)
         if frame is None:
             raise RuntimeError("No frame was available in the requested video range")
@@ -83,7 +87,12 @@ def process_video(args: argparse.Namespace) -> int:
 
 def track_players(args: argparse.Namespace) -> int:
     calibration = CourtCalibration.from_json(args.calibration)
-    mapper = CourtMapper.from_calibration(calibration)
+    with VideoReader(args.video, max_frames=1) as metadata_reader:
+        mapper = CourtMapper.from_calibration(
+            calibration,
+            frame_width=metadata_reader.metadata.width,
+            frame_height=metadata_reader.metadata.height,
+        )
     detector = YoloPersonDetector(
         args.model,
         confidence_threshold=args.confidence,

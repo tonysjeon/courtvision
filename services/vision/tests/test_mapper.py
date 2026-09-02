@@ -56,3 +56,23 @@ def test_rejects_collinear_calibration() -> None:
     )
     with pytest.raises(ValueError, match="usable court area"):
         CourtMapper.from_calibration(calibration)
+
+
+def test_scales_calibration_to_current_frame_dimensions() -> None:
+    calibration = CourtCalibration.model_validate(
+        {
+            "frame_width": 1000,
+            "frame_height": 500,
+            "keypoints": {
+                "near_left_baseline": [100, 400],
+                "near_right_baseline": [900, 400],
+                "far_left_baseline": [300, 100],
+                "far_right_baseline": [700, 100],
+            },
+        }
+    )
+
+    mapper = CourtMapper.from_calibration(calibration, frame_width=2000, frame_height=1000)
+
+    assert mapper.transform(200, 800) == pytest.approx((0, 0), abs=1e-5)
+    assert mapper.transform(1400, 200) == pytest.approx((100, 100), abs=1e-5)
