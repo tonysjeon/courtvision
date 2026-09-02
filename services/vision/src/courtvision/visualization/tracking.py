@@ -93,7 +93,7 @@ def _draw_tennis_ball(
     radius: int,
 ) -> None:
     """Draw one consistent tennis-ball marker for every tracked position."""
-    cv2.circle(image, center, radius + 2, OUTLINE_COLOR, -1, cv2.LINE_AA)
+    cv2.circle(image, center, radius + 1, OUTLINE_COLOR, -1, cv2.LINE_AA)
     cv2.circle(image, center, radius, BALL_COLOR, -1, cv2.LINE_AA)
     seam_radius = max(2, radius)
     seam_offset = max(1, radius // 2)
@@ -179,7 +179,7 @@ def render_tracking_preview(
     if ball_event is not None:
         ball_x = round(ball_event.pixel_position.x)
         ball_y = round(ball_event.pixel_position.y)
-        _draw_tennis_ball(annotated, (ball_x, ball_y), 7)
+        _draw_tennis_ball(annotated, (ball_x, ball_y), 4)
         _draw_label(
             annotated,
             "Ball",
@@ -209,7 +209,7 @@ def render_tracking_preview(
             court.shape[0],
         )
         strength = 1 - age_ms / 450
-        radius = max(2, round(5 * strength))
+        radius = max(1, round(3 * strength))
         overlay = court.copy()
         cv2.circle(overlay, (trail_x, trail_y), radius, BALL_COLOR, -1, cv2.LINE_AA)
         cv2.addWeighted(overlay, 0.2 + strength * 0.35, court, 0.8 - strength * 0.35, 0, court)
@@ -239,7 +239,7 @@ def render_tracking_preview(
             court.shape[1],
             court.shape[0],
         )
-        _draw_tennis_ball(court, (ball_x, ball_y), 11)
+        _draw_tennis_ball(court, (ball_x, ball_y), 7)
         _draw_label(court, "Ball", (ball_x + 20, ball_y), font_scale=0.48, pill_height=24)
 
     return np.hstack((annotated, court))
