@@ -16,6 +16,8 @@ DOUBLES_WIDTH_METERS = 10.97
 SERVICE_LINE_FROM_NET_METERS = 6.40
 DOUBLES_ALLEY_RATIO = (DOUBLES_WIDTH_METERS - SINGLES_WIDTH_METERS) / (2 * DOUBLES_WIDTH_METERS)
 DOUBLES_COURT_ASPECT_RATIO = COURT_LENGTH_METERS / DOUBLES_WIDTH_METERS
+SURROUND_COLOR = (123, 156, 128)
+COURT_COLOR = (183, 130, 89)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,11 +82,18 @@ def render_normalized_court(width: int = 600, height: int = 900) -> np.ndarray:
     if width < 200 or height < 300:
         raise ValueError("Court canvas must be at least 200x300 pixels")
 
-    canvas = np.full((height, width, 3), (54, 125, 76), dtype=np.uint8)
+    canvas = np.full((height, width, 3), SURROUND_COLOR, dtype=np.uint8)
     layout = _court_layout(width, height)
     line_color = (255, 255, 255)
     thickness = max(2, min(width, height) // 250)
 
+    cv2.rectangle(
+        canvas,
+        (layout.doubles_left, layout.top),
+        (layout.doubles_right, layout.bottom),
+        COURT_COLOR,
+        -1,
+    )
     cv2.rectangle(
         canvas,
         (layout.doubles_left, layout.top),

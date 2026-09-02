@@ -28,13 +28,21 @@ class PlayerTracker:
         *,
         max_missing_frames: int = 30,
         max_displacement_per_frame: float = 8.0,
+        far_player_smoothing: float = 0.45,
+        far_player_vertical_smoothing: float = 0.18,
     ) -> None:
         if max_missing_frames < 0:
             raise ValueError("max_missing_frames must be non-negative")
         if max_displacement_per_frame <= 0:
             raise ValueError("max_displacement_per_frame must be positive")
+        if not 0 < far_player_smoothing <= 1:
+            raise ValueError("far_player_smoothing must be greater than 0 and at most 1")
+        if not 0 < far_player_vertical_smoothing <= 1:
+            raise ValueError("far_player_vertical_smoothing must be greater than 0 and at most 1")
         self.max_missing_frames = max_missing_frames
         self.max_displacement_per_frame = max_displacement_per_frame
+        self.far_player_smoothing = far_player_smoothing
+        self.far_player_vertical_smoothing = far_player_vertical_smoothing
         self._states: dict[PlayerId, _TrackState] = {}
         self._next_track_id = 1
         self.track_switch_count = 0
@@ -74,8 +82,14 @@ class PlayerTracker:
                 self._states[player_id] = state
             else:
                 state.frame_id = frame_id
-                state.court_x = candidate.court_x
-                state.court_y = candidate.court_y
+                if player_id == "far_player":
+                    state.court_x += self.far_player_smoothing * (candidate.court_x - state.court_x)
+                    state.court_y += self.far_player_vertical_smoothing * (
+                        candidate.court_y - state.court_y
+                    )
+                else:
+                    state.court_x = candidate.court_x
+                    state.court_y = candidate.court_y
 
             events.append(
                 PlayerTrackingEvent(
@@ -86,7 +100,7 @@ class PlayerTracker:
                     track_id=state.track_id,
                     confidence=candidate.detection.confidence,
                     pixel_position=PixelPosition(x=candidate.pixel_x, y=candidate.pixel_y),
-                    court_position=CourtPosition(x=candidate.court_x, y=candidate.court_y),
+                    court_position=CourtPosition(x=state.court_x, y=state.court_y),
                 )
             )
         return events

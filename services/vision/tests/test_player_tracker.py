@@ -89,3 +89,36 @@ def test_does_not_offer_stale_position_to_selector() -> None:
     )
 
     assert tracker.previous_positions(4) == {}
+
+
+def test_smooths_far_player_position_without_changing_near_player_position() -> None:
+    tracker = PlayerTracker(
+        max_displacement_per_frame=20,
+        far_player_smoothing=0.5,
+        far_player_vertical_smoothing=0.2,
+    )
+    tracker.update(
+        match_id="match",
+        frame_id=1,
+        timestamp_ms=40,
+        candidates={
+            "near_player": candidate("near_player", 1, 40, 10),
+            "far_player": candidate("far_player", 1, 40, 90),
+        },
+    )
+
+    events = tracker.update(
+        match_id="match",
+        frame_id=2,
+        timestamp_ms=80,
+        candidates={
+            "near_player": candidate("near_player", 2, 50, 20),
+            "far_player": candidate("far_player", 2, 50, 80),
+        },
+    )
+    by_player = {event.object_id: event for event in events}
+
+    assert by_player["near_player"].court_position.x == 50
+    assert by_player["near_player"].court_position.y == 20
+    assert by_player["far_player"].court_position.x == 45
+    assert by_player["far_player"].court_position.y == 88

@@ -6,6 +6,8 @@ from courtvision.players.detection import BoundingBox, PersonDetection
 from courtvision.players.filtering import PlayerCandidate
 from courtvision.tracking.events import CourtPosition, PixelPosition, PlayerTrackingEvent
 from courtvision.visualization.court import (
+    COURT_COLOR,
+    SURROUND_COLOR,
     court_position_to_canvas,
     render_calibration_preview,
     render_normalized_court,
@@ -21,12 +23,15 @@ def test_renders_normalized_court() -> None:
 
 def test_draws_doubles_alleys_and_extended_net() -> None:
     court = render_normalized_court(width=600, height=900)
-    background = np.array([54, 125, 76], dtype=np.uint8)
+    surround = np.array(SURROUND_COLOR, dtype=np.uint8)
+    court_blue = np.array(COURT_COLOR, dtype=np.uint8)
 
     assert np.array_equal(court[200, 142], np.array([255, 255, 255]))
     assert np.array_equal(court[200, 181], np.array([255, 255, 255]))
-    assert not np.array_equal(court[450, 130], background)
-    assert np.array_equal(court[430, 130], background)
+    assert np.array_equal(court[300, 250], court_blue)
+    assert np.array_equal(court[300, 100], surround)
+    assert not np.array_equal(court[450, 130], surround)
+    assert np.array_equal(court[430, 130], surround)
 
 
 def test_maps_normalized_positions_to_singles_corners() -> None:

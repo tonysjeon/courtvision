@@ -27,6 +27,10 @@ class BoundingBox(BaseModel):
         return (self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2
 
     @property
+    def height(self) -> float:
+        return self.y2 - self.y1
+
+    @property
     def ground_position(self) -> tuple[float, float]:
         return (self.x1 + self.x2) / 2, self.y2
 

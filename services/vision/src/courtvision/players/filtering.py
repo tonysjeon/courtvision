@@ -25,8 +25,18 @@ class PlayerCandidate:
 class ActivePlayerSelector:
     """Use court location and prior position to reject non-player people."""
 
-    def __init__(self, *, court_margin: float = 30.0) -> None:
+    def __init__(
+        self,
+        *,
+        court_margin: float = 30.0,
+        far_player_foot_inset: float = 0.12,
+        far_player_depth_offset: float = 12.0,
+    ) -> None:
+        if not 0 <= far_player_foot_inset < 1:
+            raise ValueError("far_player_foot_inset must be between 0 and 1")
         self.court_margin = court_margin
+        self.far_player_foot_inset = far_player_foot_inset
+        self.far_player_depth_offset = far_player_depth_offset
 
     def select(
         self,
@@ -53,6 +63,10 @@ class ActivePlayerSelector:
                 if index in used or not self._belongs_to_half(player_id, values[4]):
                     continue
                 detection, pixel_x, pixel_y, court_x, court_y = values
+                if player_id == "far_player":
+                    pixel_y -= detection.bbox.height * self.far_player_foot_inset
+                    court_x, court_y = mapper.transform(pixel_x, pixel_y)
+                    court_y += self.far_player_depth_offset
                 selected[player_id] = PlayerCandidate(
                     player_id=player_id,
                     detection=detection,
