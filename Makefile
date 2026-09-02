@@ -2,8 +2,10 @@ PYTHON := uv run python
 VIDEO ?= data/sample/sample.mp4
 CALIBRATION ?= data/sample/calibration.json
 OUTPUT ?= data/processed/court_preview.png
+TRACKING_VIDEO ?= data/processed/player_tracking.mp4
+TRACKING_EVENTS ?= data/processed/player_tracking.jsonl
 
-.PHONY: install lint format test process-video
+.PHONY: install lint format test process-video track-players
 
 install:
 	uv sync --dev
@@ -24,3 +26,10 @@ process-video:
 		--video "$(VIDEO)" \
 		--calibration "$(CALIBRATION)" \
 		--output "$(OUTPUT)"
+
+track-players:
+	$(PYTHON) -m courtvision track-players \
+		--video "$(VIDEO)" \
+		--calibration "$(CALIBRATION)" \
+		--output-video "$(TRACKING_VIDEO)" \
+		--output-events "$(TRACKING_EVENTS)"

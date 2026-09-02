@@ -2,11 +2,15 @@ import numpy as np
 import pytest
 from courtvision.court.calibration import CourtCalibration
 from courtvision.geometry.mapper import CourtMapper
+from courtvision.players.detection import BoundingBox, PersonDetection
+from courtvision.players.filtering import PlayerCandidate
+from courtvision.tracking.events import CourtPosition, PixelPosition, PlayerTrackingEvent
 from courtvision.visualization.court import (
     court_position_to_canvas,
     render_calibration_preview,
     render_normalized_court,
 )
+from courtvision.visualization.tracking import render_tracking_preview
 
 
 def test_renders_normalized_court() -> None:
@@ -61,3 +65,41 @@ def test_renders_side_by_side_calibration_preview() -> None:
 def test_rejects_tiny_canvas() -> None:
     with pytest.raises(ValueError, match="at least"):
         render_normalized_court(width=100, height=100)
+
+
+def test_renders_player_tracking_preview() -> None:
+    frame = np.zeros((450, 600, 3), dtype=np.uint8)
+    detection = PersonDetection(
+        frame_id=1,
+        timestamp_ms=40,
+        confidence=0.9,
+        bbox=BoundingBox(x1=250, y1=300, x2=300, y2=400),
+    )
+    candidate = PlayerCandidate(
+        player_id="near_player",
+        detection=detection,
+        pixel_x=275,
+        pixel_y=400,
+        court_x=50,
+        court_y=-5,
+    )
+    event = PlayerTrackingEvent(
+        match_id="demo",
+        frame_id=1,
+        timestamp_ms=40,
+        object_id="near_player",
+        track_id=1,
+        confidence=0.9,
+        pixel_position=PixelPosition(x=275, y=400),
+        court_position=CourtPosition(x=50, y=-5),
+    )
+
+    preview = render_tracking_preview(
+        frame,
+        {"near_player": candidate},
+        [event],
+        timestamp_ms=40,
+    )
+
+    assert preview.shape == (450, 900, 3)
+    assert np.any(preview != 0)
