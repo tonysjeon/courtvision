@@ -15,6 +15,7 @@ SINGLES_WIDTH_METERS = 8.23
 DOUBLES_WIDTH_METERS = 10.97
 SERVICE_LINE_FROM_NET_METERS = 6.40
 DOUBLES_ALLEY_RATIO = (DOUBLES_WIDTH_METERS - SINGLES_WIDTH_METERS) / (2 * DOUBLES_WIDTH_METERS)
+DOUBLES_COURT_ASPECT_RATIO = COURT_LENGTH_METERS / DOUBLES_WIDTH_METERS
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,14 +32,18 @@ class _CourtLayout:
 
 
 def _court_layout(width: int, height: int) -> _CourtLayout:
-    horizontal_padding = round(width * 0.16)
-    vertical_padding = round(height * 0.12)
-    doubles_left = horizontal_padding
-    doubles_right = width - horizontal_padding - 1
-    top = vertical_padding
-    bottom = height - vertical_padding - 1
+    available_width = round(width * 0.68)
+    available_height = round(height * 0.76)
+    doubles_width = min(
+        available_width,
+        round(available_height / DOUBLES_COURT_ASPECT_RATIO),
+    )
+    court_length = round(doubles_width * DOUBLES_COURT_ASPECT_RATIO)
+    doubles_left = (width - doubles_width) // 2
+    doubles_right = doubles_left + doubles_width
+    top = (height - court_length) // 2
+    bottom = top + court_length
 
-    doubles_width = doubles_right - doubles_left
     alley_width = round(doubles_width * DOUBLES_ALLEY_RATIO)
     singles_left = doubles_left + alley_width
     singles_right = doubles_right - alley_width
