@@ -18,16 +18,21 @@ class FakeCapture:
         return self.opened
 
     def get(self, property_id: int) -> float:
-        return {
+        fixed_properties = {
             cv2.CAP_PROP_FPS: 25.0,
             cv2.CAP_PROP_FRAME_COUNT: 10.0,
             cv2.CAP_PROP_FRAME_WIDTH: 64.0,
             cv2.CAP_PROP_FRAME_HEIGHT: 48.0,
-        }[property_id]
+        }
+        if property_id == cv2.CAP_PROP_POS_FRAMES:
+            return float(self.position)
+        if property_id == cv2.CAP_PROP_POS_MSEC:
+            return max(0.0, (self.position - 1) * 40.0)
+        return fixed_properties[property_id]
 
     def set(self, property_id: int, value: float) -> bool:
-        assert property_id == cv2.CAP_PROP_POS_FRAMES
-        self.position = int(value)
+        assert property_id == cv2.CAP_PROP_POS_MSEC
+        self.position = int(np.ceil(value / 40.0))
         return True
 
     def read(self) -> tuple[bool, np.ndarray | None]:

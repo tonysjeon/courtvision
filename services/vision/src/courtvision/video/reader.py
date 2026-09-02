@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from math import ceil
 from pathlib import Path
 from types import TracebackType
 
@@ -101,18 +100,20 @@ class VideoReader:
         if not self._capture.isOpened():
             raise RuntimeError("VideoReader is closed")
 
-        start_frame = ceil(self.start_timestamp_ms * self.metadata.fps / 1000)
-        self._capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        self._capture.set(cv2.CAP_PROP_POS_MSEC, self.start_timestamp_ms)
         step = self.frame_skip + 1
         yielded = 0
-        frame_id = start_frame
 
         while self.max_frames is None or yielded < self.max_frames:
             ok, image = self._capture.read()
             if not ok:
                 break
 
-            timestamp_ms = frame_id * 1000 / self.metadata.fps
+            reported_frame = int(self._capture.get(cv2.CAP_PROP_POS_FRAMES)) - 1
+            frame_id = max(0, reported_frame)
+            timestamp_ms = float(self._capture.get(cv2.CAP_PROP_POS_MSEC))
+            if timestamp_ms < self.start_timestamp_ms:
+                continue
             if self.end_timestamp_ms is not None and timestamp_ms >= self.end_timestamp_ms:
                 break
 
@@ -122,8 +123,6 @@ class VideoReader:
             for _ in range(step - 1):
                 if not self._capture.grab():
                     return
-                frame_id += 1
-            frame_id += 1
 
     def close(self) -> None:
         self._capture.release()
