@@ -122,3 +122,24 @@ def test_smooths_far_player_position_without_changing_near_player_position() -> 
     assert by_player["near_player"].court_position.y == 20
     assert by_player["far_player"].court_position.x == 45
     assert by_player["far_player"].court_position.y == 88
+
+
+def test_keeps_far_track_through_detector_depth_jitter() -> None:
+    tracker = PlayerTracker(
+        max_displacement_per_frame=8,
+        far_max_vertical_displacement_per_frame=20,
+    )
+    first = tracker.update(
+        match_id="match",
+        frame_id=1,
+        timestamp_ms=40,
+        candidates={"far_player": candidate("far_player", 1, 50, 110)},
+    )
+    second = tracker.update(
+        match_id="match",
+        frame_id=2,
+        timestamp_ms=80,
+        candidates={"far_player": candidate("far_player", 2, 52, 94)},
+    )
+
+    assert first[0].track_id == second[0].track_id

@@ -9,10 +9,12 @@ from time import perf_counter
 
 import cv2
 
+from courtvision.ball.motion import MotionBallDetector
 from courtvision.court.calibration import CourtCalibration
 from courtvision.geometry.mapper import CourtMapper
 from courtvision.pipeline import PlayerTrackingPipeline
 from courtvision.players.yolo import YoloPersonDetector
+from courtvision.tracking.ball_tracker import BallTracker
 from courtvision.video.reader import VideoReader
 from courtvision.visualization.court import render_calibration_preview
 from courtvision.visualization.tracking import render_tracking_preview
@@ -31,8 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
     process.add_argument("--start-ms", type=float, default=0.0)
 
     track = subparsers.add_parser(
-        "track-players",
-        help="Detect and track the active players in a video.",
+        "track-video",
+        aliases=["track-players"],
+        help="Detect and track the active players and ball in a video.",
     )
     track.add_argument("--video", type=Path, required=True)
     track.add_argument("--calibration", type=Path, required=True)
@@ -86,6 +89,8 @@ def track_players(args: argparse.Namespace) -> int:
         match_id=args.match_id,
         detector=detector,
         mapper=mapper,
+        ball_detector=MotionBallDetector(mapper),
+        ball_tracker=BallTracker(mapper),
     )
 
     args.output_video.parent.mkdir(parents=True, exist_ok=True)
@@ -93,6 +98,8 @@ def track_players(args: argparse.Namespace) -> int:
     writer: cv2.VideoWriter | None = None
     frame_count = 0
     event_count = 0
+    ball_observation_count = 0
+    interpolated_ball_count = 0
     started_at = perf_counter()
 
     try:
@@ -114,6 +121,7 @@ def track_players(args: argparse.Namespace) -> int:
                     result.candidates,
                     result.events,
                     timestamp_ms=frame.timestamp_ms,
+                    ball_event=result.ball_event,
                 )
                 if writer is None:
                     height, width = preview.shape[:2]
@@ -128,6 +136,11 @@ def track_players(args: argparse.Namespace) -> int:
                 writer.write(preview)
                 for event in result.events:
                     events_file.write(event.model_dump_json() + "\n")
+                if result.ball_event is not None:
+                    events_file.write(result.ball_event.model_dump_json() + "\n")
+                    event_count += 1
+                    ball_observation_count += 1
+                    interpolated_ball_count += int(result.ball_event.is_interpolated)
                 frame_count += 1
                 event_count += len(result.events)
             if frame_count == 0:
@@ -143,6 +156,8 @@ def track_players(args: argparse.Namespace) -> int:
         "output_events": str(args.output_events),
         "frames_processed": frame_count,
         "events_written": event_count,
+        "ball_observations": ball_observation_count,
+        "interpolated_ball_observations": interpolated_ball_count,
         "track_switches": pipeline.tracker.track_switch_count,
         "processing_fps": frame_count / elapsed_seconds if elapsed_seconds else 0,
     }
@@ -154,5 +169,5 @@ def main() -> None:
     args = build_parser().parse_args()
     if args.command == "process-video":
         raise SystemExit(process_video(args))
-    if args.command == "track-players":
+    if args.command in {"track-video", "track-players"}:
         raise SystemExit(track_players(args))

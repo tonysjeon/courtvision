@@ -2,8 +2,8 @@
 
 CourtVision maps points from recorded tennis footage onto a normalized court.
 
-Right now, the project can calibrate a court, detect the two active players, and map their
-movement onto a normalized court.
+Right now, the project can calibrate a court, detect the two active players and tennis ball,
+and map their movement onto a normalized court.
 
 ## Requirements
 
@@ -33,10 +33,10 @@ make process-video
 The preview is written to `data/processed/court_preview.png`. Videos, local calibration files,
 and generated output in these directories are ignored by Git.
 
-To track both players:
+To track the players and ball:
 
 ```bash
-make track-players VIDEO=data/sample/sample.mov
+make track-video VIDEO=data/sample/sample.mov
 ```
 
 This writes an annotated video and JSONL tracking events to `data/processed/`.
@@ -56,6 +56,7 @@ uv run courtvision process-video \
 ```text
 services/vision/src/courtvision/
 ├── court/           # calibration models and file loading
+├── ball/            # tennis-ball candidate detection
 ├── geometry/        # image/court perspective transforms
 ├── players/         # person detection and active-player selection
 ├── tracking/        # persistent tracks and event schemas

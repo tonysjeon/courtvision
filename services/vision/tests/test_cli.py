@@ -1,10 +1,10 @@
 from courtvision.cli import build_parser
 
 
-def test_player_tracking_defaults() -> None:
+def test_video_tracking_defaults() -> None:
     args = build_parser().parse_args(
         [
-            "track-players",
+            "track-video",
             "--video",
             "clip.mov",
             "--calibration",

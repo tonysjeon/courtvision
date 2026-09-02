@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from math import hypot
 
 from courtvision.players.filtering import PlayerCandidate, PlayerId
 from courtvision.tracking.events import CourtPosition, PixelPosition, PlayerTrackingEvent
@@ -28,6 +27,7 @@ class PlayerTracker:
         *,
         max_missing_frames: int = 30,
         max_displacement_per_frame: float = 8.0,
+        far_max_vertical_displacement_per_frame: float = 20.0,
         far_player_smoothing: float = 0.45,
         far_player_vertical_smoothing: float = 0.18,
     ) -> None:
@@ -35,12 +35,15 @@ class PlayerTracker:
             raise ValueError("max_missing_frames must be non-negative")
         if max_displacement_per_frame <= 0:
             raise ValueError("max_displacement_per_frame must be positive")
+        if far_max_vertical_displacement_per_frame <= 0:
+            raise ValueError("far_max_vertical_displacement_per_frame must be positive")
         if not 0 < far_player_smoothing <= 1:
             raise ValueError("far_player_smoothing must be greater than 0 and at most 1")
         if not 0 < far_player_vertical_smoothing <= 1:
             raise ValueError("far_player_vertical_smoothing must be greater than 0 and at most 1")
         self.max_missing_frames = max_missing_frames
         self.max_displacement_per_frame = max_displacement_per_frame
+        self.far_max_vertical_displacement_per_frame = far_max_vertical_displacement_per_frame
         self.far_player_smoothing = far_player_smoothing
         self.far_player_vertical_smoothing = far_player_vertical_smoothing
         self._states: dict[PlayerId, _TrackState] = {}
@@ -121,5 +124,12 @@ class PlayerTracker:
         frame_id: int,
     ) -> bool:
         frame_gap = max(1, frame_id - state.frame_id)
-        displacement = hypot(candidate.court_x - state.court_x, candidate.court_y - state.court_y)
-        return displacement <= self.max_displacement_per_frame * frame_gap
+        horizontal_displacement = abs(candidate.court_x - state.court_x)
+        vertical_displacement = abs(candidate.court_y - state.court_y)
+        horizontal_limit = self.max_displacement_per_frame * frame_gap
+        vertical_limit = horizontal_limit
+        if candidate.player_id == "far_player":
+            vertical_limit = self.far_max_vertical_displacement_per_frame * frame_gap
+        within_horizontal_limit = horizontal_displacement <= horizontal_limit
+        within_vertical_limit = vertical_displacement <= vertical_limit
+        return within_horizontal_limit and within_vertical_limit

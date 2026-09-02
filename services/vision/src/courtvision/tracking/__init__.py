@@ -1,6 +1,19 @@
-"""Player tracking and event generation."""
+"""Object tracking and event generation."""
 
-from courtvision.tracking.events import CourtPosition, PixelPosition, PlayerTrackingEvent
+from courtvision.tracking.ball_tracker import BallTracker
+from courtvision.tracking.events import (
+    BallTrackingEvent,
+    CourtPosition,
+    PixelPosition,
+    PlayerTrackingEvent,
+)
 from courtvision.tracking.player_tracker import PlayerTracker
 
-__all__ = ["CourtPosition", "PixelPosition", "PlayerTracker", "PlayerTrackingEvent"]
+__all__ = [
+    "BallTracker",
+    "BallTrackingEvent",
+    "CourtPosition",
+    "PixelPosition",
+    "PlayerTracker",
+    "PlayerTrackingEvent",
+]

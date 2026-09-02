@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from courtvision.players.filtering import PlayerCandidate, PlayerId
-from courtvision.tracking.events import PlayerTrackingEvent
+from courtvision.tracking.events import BallTrackingEvent, PlayerTrackingEvent
 from courtvision.visualization.court import court_position_to_canvas, render_normalized_court
 
 PLAYER_COLORS: dict[PlayerId, tuple[int, int, int]] = {
@@ -19,6 +19,7 @@ PLAYER_LABELS: dict[PlayerId, str] = {
 }
 OUTLINE_COLOR = (25, 25, 25)
 LABEL_TEXT_COLOR = (255, 255, 255)
+BALL_COLOR = (35, 255, 190)
 
 
 def _draw_rounded_rectangle(
@@ -89,6 +90,7 @@ def render_tracking_preview(
     events: list[PlayerTrackingEvent],
     *,
     timestamp_ms: float,
+    ball_event: BallTrackingEvent | None = None,
 ) -> np.ndarray:
     annotated = frame.copy()
     event_by_player = {event.object_id: event for event in events}
@@ -135,6 +137,25 @@ def render_tracking_preview(
             cv2.LINE_AA,
         )
 
+    if ball_event is not None:
+        ball_x = round(ball_event.pixel_position.x)
+        ball_y = round(ball_event.pixel_position.y)
+        cv2.circle(annotated, (ball_x, ball_y), 10, OUTLINE_COLOR, -1, cv2.LINE_AA)
+        ball_thickness = 2 if ball_event.is_interpolated else -1
+        cv2.circle(
+            annotated,
+            (ball_x, ball_y),
+            7,
+            BALL_COLOR,
+            ball_thickness,
+            cv2.LINE_AA,
+        )
+        _draw_label(
+            annotated,
+            "Ball" if not ball_event.is_interpolated else "Ball · estimated",
+            (ball_x + 14, ball_y + 5),
+            font_scale=0.48,
+        )
     cv2.putText(
         annotated,
         f"{timestamp_ms / 1000:.2f}s",
@@ -164,5 +185,18 @@ def render_tracking_preview(
             font_scale=0.48,
             pill_height=28,
         )
+
+    if ball_event is not None:
+        ball_x, ball_y = court_position_to_canvas(
+            ball_event.court_position.x,
+            ball_event.court_position.y,
+            court.shape[1],
+            court.shape[0],
+        )
+        cv2.circle(court, (ball_x, ball_y), 10, OUTLINE_COLOR, -1, cv2.LINE_AA)
+        ball_thickness = 2 if ball_event.is_interpolated else -1
+        cv2.circle(court, (ball_x, ball_y), 7, BALL_COLOR, ball_thickness, cv2.LINE_AA)
+        ball_label = "Ball est." if ball_event.is_interpolated else "Ball"
+        _draw_label(court, ball_label, (ball_x + 15, ball_y), font_scale=0.44, pill_height=20)
 
     return np.hstack((annotated, court))
