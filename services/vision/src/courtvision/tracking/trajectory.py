@@ -30,6 +30,12 @@ class _FilterStep(NamedTuple):
     transition: np.ndarray
 
 
+class _Measurement(NamedTuple):
+    timestamp_ms: float
+    position: np.ndarray
+    confidence: float
+
+
 def smooth_ball_trajectory(
     frames: list[TrajectoryFrame],
     events: list[BallTrackingEvent | None],
@@ -115,6 +121,7 @@ def _smooth_segment(
     covariance = np.diag([100.0, 100.0, 250_000.0, 250_000.0])
     steps: list[_FilterStep] = []
     accepted_anchors: set[int] = set()
+    measurement_history: list[_Measurement] = []
 
     for index in range(start, end + 1):
         if index == start:
@@ -135,10 +142,18 @@ def _smooth_segment(
         covariance = predicted_covariance
         event = events[index] if index in anchor_set else None
         if event is not None:
-            measurement = np.array(
+            raw_measurement = np.array(
                 [event.pixel_position.x, event.pixel_position.y],
                 dtype=np.float64,
             )
+            measurement, direction_reset = _directional_measurement(
+                raw_measurement,
+                event.confidence,
+                frames[index].timestamp_ms,
+                measurement_history,
+            )
+            if direction_reset:
+                measurement_history.clear()
             residual = measurement - state[:2]
             uncertainty = 10.0 + (1.0 - event.confidence) * 25.0
             innovation_covariance = covariance[:2, :2] + np.eye(2) * uncertainty**2
@@ -151,6 +166,14 @@ def _smooth_segment(
                 state = state + gain @ residual
                 covariance = (np.eye(4) - gain @ observation) @ covariance
                 accepted_anchors.add(index)
+                measurement_history.append(
+                    _Measurement(
+                        frames[index].timestamp_ms,
+                        raw_measurement,
+                        event.confidence,
+                    )
+                )
+                measurement_history = measurement_history[-6:]
         steps.append(
             _FilterStep(
                 state.copy(),
@@ -207,6 +230,53 @@ def _transition(elapsed_seconds: float) -> np.ndarray:
             [0.0, 0.0, 0.0, 1.0],
         ],
     )
+
+
+def _directional_measurement(
+    measurement: np.ndarray,
+    confidence: float,
+    timestamp_ms: float,
+    history: list[_Measurement],
+) -> tuple[np.ndarray, bool]:
+    """Blend a detection with the recent shot direction and identify real reversals."""
+    recent = [item for item in history if timestamp_ms - item.timestamp_ms <= 400]
+    if len(recent) < 3:
+        return measurement, False
+
+    times = np.array([item.timestamp_ms for item in recent], dtype=np.float64)
+    times = (times - times[-1]) / 1000
+    positions = np.array([item.position for item in recent])
+    weights = np.array([item.confidence for item in recent], dtype=np.float64)
+    design = np.column_stack((times, np.ones_like(times)))
+    weighted_design = design * np.sqrt(weights)[:, None]
+    weighted_positions = positions * np.sqrt(weights)[:, None]
+    coefficients = np.linalg.lstsq(weighted_design, weighted_positions, rcond=None)[0]
+    velocity = coefficients[0]
+    elapsed_seconds = (timestamp_ms - recent[-1].timestamp_ms) / 1000
+    prediction = coefficients[1] + velocity * elapsed_seconds
+
+    step = measurement - recent[-1].position
+    speed = np.linalg.norm(velocity)
+    step_size = np.linalg.norm(step)
+    reverses_direction = (
+        confidence >= 0.75
+        and speed > 80
+        and step_size > 3
+        and np.dot(step, velocity) < -0.35 * speed * step_size
+    )
+    if reverses_direction:
+        return measurement, True
+
+    prediction_weight = 0.15 + (1.0 - confidence) * 0.4
+    if speed > 80:
+        direction = velocity / speed
+        residual = measurement - prediction
+        cross_track = residual - np.dot(residual, direction) * direction
+        if np.linalg.norm(cross_track) > 35:
+            prediction_weight = max(prediction_weight, 0.5)
+    prediction_weight = float(np.clip(prediction_weight, 0.15, 0.55))
+    blended = measurement * (1.0 - prediction_weight) + prediction * prediction_weight
+    return blended, False
 
 
 def _process_noise(elapsed_seconds: float, acceleration_noise: float) -> np.ndarray:

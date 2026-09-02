@@ -6,7 +6,11 @@ from courtvision.tracking.events import (
     PixelPosition,
     PlayerTrackingEvent,
 )
-from courtvision.tracking.trajectory import TrajectoryFrame, smooth_ball_trajectory
+from courtvision.tracking.trajectory import (
+    TrajectoryFrame,
+    _directional_measurement,
+    smooth_ball_trajectory,
+)
 
 
 def event(frame_id: int, x: float, y: float, confidence: float = 0.9) -> BallTrackingEvent:
@@ -106,3 +110,31 @@ def test_ground_projection_ignores_airborne_depth_reversal() -> None:
 
     court_depths = [item.court_position.y for item in result if item is not None]
     assert all(left >= right for left, right in zip(court_depths, court_depths[1:], strict=False))
+
+
+def test_uses_recent_shot_direction_to_reduce_cross_track_noise() -> None:
+    from courtvision.tracking.trajectory import _Measurement
+
+    history = [_Measurement(index * 40, np.array([index * 10.0, 20.0]), 0.9) for index in range(4)]
+
+    corrected, reset = _directional_measurement(
+        np.array([40.0, 50.0]),
+        0.4,
+        160,
+        history,
+    )
+
+    assert not reset
+    assert corrected[1] < 40
+
+
+def test_resets_direction_on_confident_reversal() -> None:
+    from courtvision.tracking.trajectory import _Measurement
+
+    history = [_Measurement(index * 40, np.array([index * 10.0, 20.0]), 0.9) for index in range(4)]
+    measurement = np.array([20.0, 20.0])
+
+    corrected, reset = _directional_measurement(measurement, 0.9, 160, history)
+
+    assert reset
+    assert np.array_equal(corrected, measurement)
