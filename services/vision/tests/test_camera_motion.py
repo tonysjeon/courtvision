@@ -30,6 +30,31 @@ def test_aligns_zoomed_frame_to_reference_coordinates() -> None:
     assert mapper.transform(*current_point) == pytest.approx((220, 160), abs=1.5)
 
 
+def test_prefers_colored_court_plane_over_background_features() -> None:
+    reference = np.full((360, 480, 3), (100, 145, 120), dtype=np.uint8)
+    court = np.float32([[90, 320], [390, 320], [175, 80], [305, 80]])
+    cv2.fillConvexPoly(reference, court.astype(np.int32), (158, 122, 109))
+    reference_to_current = np.array(
+        [[1.06, 0.01, -18], [0, 1.08, 14], [0, 0.00002, 1]],
+        dtype=float,
+    )
+    current = cv2.warpPerspective(reference, reference_to_current, (480, 360))
+    normalized = np.float32([[0, 0], [100, 0], [0, 100], [100, 100]])
+    reference_mapper = CourtMapper(cv2.getPerspectiveTransform(court, normalized))
+    compensator = CameraMotionCompensator(reference, reference_mapper, smoothing=1)
+
+    mapper = compensator.mapper_for_frame(current)
+    current_point = cv2.perspectiveTransform(
+        np.float32([[[240, 200]]]),
+        reference_to_current,
+    )[0, 0]
+
+    assert mapper.transform(*current_point) == pytest.approx(
+        reference_mapper.transform(240, 200),
+        abs=2,
+    )
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
