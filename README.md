@@ -1,31 +1,32 @@
 # CourtVision
 
-CourtVision tracks the two active players and the ball in tennis footage, then maps the
-rally onto a top-down court.
+CourtVision translates tennis match footage into a top-down view of player and ball movement
+during each rally.
 
-This is an enhanced version of a UCLA Tennis Consulting project I led. It builds on that
-work with camera-aware court calibration, steadier player positioning, and estimated ball
-movement between frames.
+It is an enhanced version of a UCLA Tennis Consulting project I led, expanded with
+camera-aware calibration and more stable movement tracking.
 
 ## Demo
 
 ![CourtVision tracking demo](assets/courtvision-demo.gif)
 
-The broadcast view shows the detections used by the tracker. The court view shows the same
-rally from above, including player movement and the ball's estimated path through the air.
+The broadcast view shows the detections used by the tracker. The right panel maps that
+movement onto the court, including the ball's estimated path through the air.
 
-## What it does
+## Pipeline
 
-- calibrates the visible court from four baseline corners
-- follows the near and far players as the broadcast camera moves
-- detects the tennis ball and fills short gaps using the surrounding frames
-- maps airborne shots and observed bounces onto a normalized court
-- exports an annotated video and frame-by-frame JSONL events
+1. Calibrate the visible court from its four baseline corners.
+2. Detect and track both players while compensating for broadcast camera movement.
+3. Detect the ball and estimate its path between frames, including airborne shots and bounces.
+4. Export an annotated video, top-down court view, and frame-by-frame JSONL events.
+
+## Tech stack
+
+Python · OpenCV · NumPy · PyTorch · Ultralytics YOLO · TrackNet · Pydantic
 
 ## Development
 
-CourtVision requires Python 3.11 through 3.14 and
-[uv](https://docs.astral.sh/uv/). Install the project and run its checks with:
+Requires Python 3.11–3.14 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 make install
@@ -33,25 +34,12 @@ make lint
 make test
 ```
 
-The pipeline accepts MP4 or MOV footage. Local clips and calibration files belong in
-`data/sample/`; generated videos and events are written to `data/processed/`.
+Place MP4 or MOV footage and its calibration file in `data/sample/`. Generated videos and
+events are written to `data/processed/`.
 
 ```bash
 make process-video
 make track-video VIDEO=data/sample/sample.mov
 ```
 
-Ball tracking uses TrackNet tennis weights at `models/tracknet-tennis.pt`.
-
-## Project structure
-
-```text
-services/vision/src/courtvision/
-├── court/           # calibration models and file loading
-├── ball/            # tennis-ball candidate detection
-├── geometry/        # image/court perspective transforms
-├── players/         # person detection and active-player selection
-├── tracking/        # persistent tracks and event schemas
-├── video/           # timestamp-aware frame ingestion
-└── visualization/   # normalized court and calibration previews
-```
+Ball tracking expects TrackNet tennis weights at `models/tracknet-tennis.pt`.
