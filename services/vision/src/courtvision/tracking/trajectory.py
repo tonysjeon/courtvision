@@ -85,7 +85,7 @@ def smooth_ball_trajectory(
     if player_events is not None:
         if len(player_events) != len(frames):
             raise ValueError("player_events and frames must have the same length")
-        _apply_ground_projection(frames, output, player_events)
+        _apply_ground_projection(frames, output, player_events, mapper, frame_mappers)
     return output
 
 
@@ -313,6 +313,8 @@ def _apply_ground_projection(
     frames: list[TrajectoryFrame],
     ball_events: list[BallTrackingEvent | None],
     player_events: list[list[PlayerTrackingEvent]],
+    mapper: CourtMapper,
+    frame_mappers: list[CourtMapper] | None,
 ) -> None:
     """Separate apparent ball height from its top-down ground movement."""
     segment_start = None
@@ -327,6 +329,8 @@ def _apply_ground_projection(
                 player_events,
                 segment_start,
                 index - 1,
+                mapper,
+                frame_mappers,
             )
             segment_start = None
 
@@ -337,6 +341,8 @@ def _project_segment_to_ground(
     player_events: list[list[PlayerTrackingEvent]],
     start: int,
     end: int,
+    mapper: CourtMapper,
+    frame_mappers: list[CourtMapper] | None,
 ) -> None:
     visits = _side_visits(frames, ball_events, start, end)
     anchors = [
@@ -352,22 +358,14 @@ def _project_segment_to_ground(
         return
 
     for left, right in zip(anchors, anchors[1:], strict=False):
-        left_index, _, left_position = left
-        right_index, _, right_position = right
-        duration = max(
-            1.0,
-            frames[right_index].timestamp_ms - frames[left_index].timestamp_ms,
-        )
-        for index in range(left_index, right_index + 1):
-            event = ball_events[index]
-            if event is None:
-                continue
-            progress = (frames[index].timestamp_ms - frames[left_index].timestamp_ms) / duration
-            court_x = left_position.x + progress * (right_position.x - left_position.x)
-            court_y = left_position.y + progress * (right_position.y - left_position.y)
-            ball_events[index] = event.model_copy(
-                update={"court_position": CourtPosition(x=court_x, y=court_y)}
-            )
+        bounce = _bounce_anchor(frames, ball_events, left, right, mapper, frame_mappers)
+        motion_anchors = [left]
+        if bounce is not None:
+            bounce_index, bounce_position = bounce
+            motion_anchors.append((bounce_index, "bounce", bounce_position))
+        motion_anchors.append(right)
+        for motion_left, motion_right in zip(motion_anchors, motion_anchors[1:], strict=False):
+            _interpolate_ground_path(frames, ball_events, motion_left, motion_right)
 
     first_index, _, first_position = anchors[0]
     for index in range(start, first_index):
@@ -379,6 +377,67 @@ def _project_segment_to_ground(
         event = ball_events[index]
         if event is not None:
             ball_events[index] = event.model_copy(update={"court_position": last_position})
+
+
+def _interpolate_ground_path(
+    frames: list[TrajectoryFrame],
+    ball_events: list[BallTrackingEvent | None],
+    left: tuple[int, str, CourtPosition],
+    right: tuple[int, str, CourtPosition],
+) -> None:
+    left_index, _, left_position = left
+    right_index, _, right_position = right
+    duration = max(
+        1.0,
+        frames[right_index].timestamp_ms - frames[left_index].timestamp_ms,
+    )
+    for index in range(left_index, right_index + 1):
+        event = ball_events[index]
+        if event is None:
+            continue
+        progress = (frames[index].timestamp_ms - frames[left_index].timestamp_ms) / duration
+        court_x = left_position.x + progress * (right_position.x - left_position.x)
+        court_y = left_position.y + progress * (right_position.y - left_position.y)
+        ball_events[index] = event.model_copy(
+            update={"court_position": CourtPosition(x=court_x, y=court_y)}
+        )
+
+
+
+def _bounce_anchor(
+    frames: list[TrajectoryFrame],
+    ball_events: list[BallTrackingEvent | None],
+    left: tuple[int, str, CourtPosition],
+    right: tuple[int, str, CourtPosition],
+    mapper: CourtMapper,
+    frame_mappers: list[CourtMapper] | None,
+    *,
+    maximum_ground_residual: float = 30.0,
+) -> tuple[int, CourtPosition] | None:
+    left_index, _, left_position = left
+    right_index, right_side, right_position = right
+    duration = max(1.0, frames[right_index].timestamp_ms - frames[left_index].timestamp_ms)
+    candidates = []
+    for index in range(left_index + 3, right_index - 1):
+        event = ball_events[index]
+        if event is None:
+            continue
+        progress = (frames[index].timestamp_ms - frames[left_index].timestamp_ms) / duration
+        projected_x = left_position.x + progress * (right_position.x - left_position.x)
+        projected_y = left_position.y + progress * (right_position.y - left_position.y)
+        on_receiving_half = projected_y <= 50 if right_side == "near_player" else projected_y >= 50
+        if not on_receiving_half:
+            continue
+        frame_mapper = mapper if frame_mappers is None else frame_mappers[index]
+        _, ground_pixel_y = frame_mapper.inverse_transform(projected_x, projected_y)
+        residual = abs(ground_pixel_y - event.pixel_position.y)
+        candidates.append((residual, index, event.court_position))
+    if not candidates:
+        return None
+    residual, index, position = min(candidates, key=lambda candidate: candidate[0])
+    if residual > maximum_ground_residual:
+        return None
+    return index, position
 
 
 def _side_visits(

@@ -9,6 +9,7 @@ from courtvision.tracking.events import (
 )
 from courtvision.tracking.trajectory import (
     TrajectoryFrame,
+    _bounce_anchor,
     _directional_measurement,
     smooth_ball_trajectory,
 )
@@ -130,6 +131,33 @@ def test_ground_projection_ignores_airborne_depth_reversal() -> None:
 
     court_depths = [item.court_position.y for item in result if item is not None]
     assert all(left >= right for left, right in zip(court_depths, court_depths[1:], strict=False))
+
+
+def test_ground_projection_passes_through_observed_bounce() -> None:
+    frames = [TrajectoryFrame(index, index * 40) for index in range(7)]
+    events = [
+        event(0, 10, 100),
+        event(1, 20, 120),
+        event(2, 30, 90),
+        event(3, 45, 65),
+        event(4, 80, 25),
+        event(5, 90, 35),
+        event(6, 100, 0),
+    ]
+    bounce = _bounce_anchor(
+        frames,
+        events,
+        (0, "far_player", CourtPosition(x=10, y=100)),
+        (6, "near_player", CourtPosition(x=100, y=0)),
+        CourtMapper(np.eye(3)),
+        None,
+    )
+
+    assert bounce is not None
+    index, position = bounce
+    assert index == 4
+    assert position.x == pytest.approx(80)
+    assert position.y == pytest.approx(25)
 
 
 def test_uses_recent_shot_direction_to_reduce_cross_track_noise() -> None:
