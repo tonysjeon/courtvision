@@ -53,3 +53,18 @@ def test_rejects_negative_pixel_coordinates() -> None:
                 "far_right_baseline": [800, 200],
             }
         )
+
+
+def test_requires_both_frame_dimensions() -> None:
+    with pytest.raises(ValidationError, match="provided together"):
+        CourtCalibration.model_validate(
+            {
+                "frame_width": 1920,
+                "keypoints": {
+                    "near_left_baseline": [100, 700],
+                    "near_right_baseline": [1100, 700],
+                    "far_left_baseline": [400, 200],
+                    "far_right_baseline": [800, 200],
+                },
+            }
+        )

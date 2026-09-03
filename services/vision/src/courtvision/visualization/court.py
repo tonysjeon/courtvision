@@ -16,6 +16,8 @@ DOUBLES_WIDTH_METERS = 10.97
 SERVICE_LINE_FROM_NET_METERS = 6.40
 DOUBLES_ALLEY_RATIO = (DOUBLES_WIDTH_METERS - SINGLES_WIDTH_METERS) / (2 * DOUBLES_WIDTH_METERS)
 DOUBLES_COURT_ASPECT_RATIO = COURT_LENGTH_METERS / DOUBLES_WIDTH_METERS
+SURROUND_COLOR = (121, 145, 129)
+COURT_COLOR = (158, 122, 109)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +35,7 @@ class _CourtLayout:
 
 def _court_layout(width: int, height: int) -> _CourtLayout:
     available_width = round(width * 0.68)
-    available_height = round(height * 0.76)
+    available_height = round(height * 0.66)
     doubles_width = min(
         available_width,
         round(available_height / DOUBLES_COURT_ASPECT_RATIO),
@@ -80,11 +82,18 @@ def render_normalized_court(width: int = 600, height: int = 900) -> np.ndarray:
     if width < 200 or height < 300:
         raise ValueError("Court canvas must be at least 200x300 pixels")
 
-    canvas = np.full((height, width, 3), (54, 125, 76), dtype=np.uint8)
+    canvas = np.full((height, width, 3), SURROUND_COLOR, dtype=np.uint8)
     layout = _court_layout(width, height)
     line_color = (255, 255, 255)
     thickness = max(2, min(width, height) // 250)
 
+    cv2.rectangle(
+        canvas,
+        (layout.doubles_left, layout.top),
+        (layout.doubles_right, layout.bottom),
+        COURT_COLOR,
+        -1,
+    )
     cv2.rectangle(
         canvas,
         (layout.doubles_left, layout.top),
@@ -144,7 +153,9 @@ def render_calibration_preview(
 ) -> np.ndarray:
     """Place an annotated source frame beside its normalized court."""
     annotated = frame.copy()
-    points = np.asarray(calibration.keypoints.ordered_points(), dtype=np.int32)
+    frame_height, frame_width = frame.shape[:2]
+    scaled_points = calibration.ordered_points_for_frame(frame_width, frame_height)
+    points = np.asarray(scaled_points, dtype=np.int32)
     polygon = points[[0, 1, 3, 2]].reshape((-1, 1, 2))
     cv2.polylines(annotated, [polygon], True, (0, 255, 255), 3, cv2.LINE_AA)
 
@@ -163,7 +174,7 @@ def render_calibration_preview(
         )
 
     court = render_normalized_court(width=max(300, frame.shape[1] // 2), height=frame.shape[0])
-    for source in calibration.keypoints.ordered_points():
+    for source in scaled_points:
         court_x, court_y = mapper.transform(*source)
         px, py = court_position_to_canvas(
             court_x,

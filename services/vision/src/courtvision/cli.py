@@ -4,14 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import deque
 from pathlib import Path
+from time import perf_counter
 
 import cv2
 
+from courtvision.ball.tracknet import TrackNetBallDetector
 from courtvision.court.calibration import CourtCalibration
+from courtvision.geometry.camera_motion import CameraMotionCompensator
 from courtvision.geometry.mapper import CourtMapper
+from courtvision.pipeline import PlayerTrackingPipeline
+from courtvision.players.yolo import YoloPersonDetector
+from courtvision.tracking.ball_tracker import BallTracker
+from courtvision.tracking.trajectory import TrajectoryFrame, smooth_ball_trajectory
 from courtvision.video.reader import VideoReader
 from courtvision.visualization.court import render_calibration_preview
+from courtvision.visualization.tracking import render_tracking_preview
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,14 +34,43 @@ def build_parser() -> argparse.ArgumentParser:
     process.add_argument("--calibration", type=Path, required=True)
     process.add_argument("--output", type=Path, required=True)
     process.add_argument("--start-ms", type=float, default=0.0)
+
+    track = subparsers.add_parser(
+        "track-video",
+        aliases=["track-players"],
+        help="Detect and track the active players and ball in a video.",
+    )
+    track.add_argument("--video", type=Path, required=True)
+    track.add_argument("--calibration", type=Path, required=True)
+    track.add_argument("--output-video", type=Path, required=True)
+    track.add_argument("--output-events", type=Path, required=True)
+    track.add_argument("--match-id", default="local_match")
+    track.add_argument("--model", default="yolo11n.pt")
+    track.add_argument("--ball-model", type=Path, default=Path("models/tracknet-tennis.pt"))
+    track.add_argument("--confidence", type=float, default=0.20)
+    track.add_argument("--device")
+    track.add_argument("--ball-device")
+    track.add_argument("--frame-skip", type=int, default=0)
+    track.add_argument("--max-frames", type=int)
+    track.add_argument("--start-ms", type=float, default=0.0)
+    track.add_argument("--end-ms", type=float)
+    track.add_argument(
+        "--no-camera-motion",
+        action="store_true",
+        help="Disable per-frame compensation for broadcast pan and zoom.",
+    )
     return parser
 
 
 def process_video(args: argparse.Namespace) -> int:
     calibration = CourtCalibration.from_json(args.calibration)
-    mapper = CourtMapper.from_calibration(calibration)
 
     with VideoReader(args.video, start_timestamp_ms=args.start_ms, max_frames=1) as reader:
+        mapper = CourtMapper.from_calibration(
+            calibration,
+            frame_width=reader.metadata.width,
+            frame_height=reader.metadata.height,
+        )
         frame = next(iter(reader), None)
         if frame is None:
             raise RuntimeError("No frame was available in the requested video range")
@@ -53,7 +91,133 @@ def process_video(args: argparse.Namespace) -> int:
     return 0
 
 
+def track_players(args: argparse.Namespace) -> int:
+    calibration = CourtCalibration.from_json(args.calibration)
+    with VideoReader(args.video, max_frames=1) as metadata_reader:
+        mapper = CourtMapper.from_calibration(
+            calibration,
+            frame_width=metadata_reader.metadata.width,
+            frame_height=metadata_reader.metadata.height,
+        )
+        reference_frame = next(iter(metadata_reader), None)
+    if reference_frame is None:
+        raise RuntimeError("No frame was available for camera calibration")
+    camera_motion = None
+    if not args.no_camera_motion:
+        camera_motion = CameraMotionCompensator(reference_frame.image, mapper)
+    detector = YoloPersonDetector(
+        args.model,
+        confidence_threshold=args.confidence,
+        device=args.device,
+    )
+    pipeline = PlayerTrackingPipeline(
+        match_id=args.match_id,
+        detector=detector,
+        mapper=mapper,
+        ball_detector=TrackNetBallDetector(args.ball_model, device=args.ball_device),
+        ball_tracker=BallTracker(mapper),
+        camera_motion=camera_motion,
+    )
+
+    args.output_video.parent.mkdir(parents=True, exist_ok=True)
+    args.output_events.parent.mkdir(parents=True, exist_ok=True)
+    writer: cv2.VideoWriter | None = None
+    results = []
+    timeline = []
+    frame_count = 0
+    event_count = 0
+    ball_observation_count = 0
+    interpolated_ball_count = 0
+    ball_trail = deque(maxlen=32)
+    started_at = perf_counter()
+
+    with VideoReader(
+        args.video,
+        frame_skip=args.frame_skip,
+        max_frames=args.max_frames,
+        start_timestamp_ms=args.start_ms,
+        end_timestamp_ms=args.end_ms,
+    ) as reader:
+        output_fps = reader.metadata.fps / (args.frame_skip + 1)
+        for frame in reader:
+            results.append(pipeline.process(frame))
+            timeline.append(TrajectoryFrame(frame.frame_id, frame.timestamp_ms))
+    if not results:
+        raise RuntimeError("No frames were available in the requested video range")
+
+    ball_events = smooth_ball_trajectory(
+        timeline,
+        [result.ball_event for result in results],
+        mapper,
+        frame_mappers=[result.mapper for result in results],
+        player_events=[result.events for result in results],
+    )
+
+    try:
+        with (
+            VideoReader(
+                args.video,
+                frame_skip=args.frame_skip,
+                max_frames=args.max_frames,
+                start_timestamp_ms=args.start_ms,
+                end_timestamp_ms=args.end_ms,
+            ) as reader,
+            args.output_events.open("w", encoding="utf-8") as events_file,
+        ):
+            for frame, result, ball_event in zip(reader, results, ball_events, strict=True):
+                if ball_event is not None:
+                    ball_trail.append(ball_event)
+                preview = render_tracking_preview(
+                    frame.image,
+                    result.candidates,
+                    result.events,
+                    timestamp_ms=frame.timestamp_ms,
+                    ball_event=ball_event,
+                    ball_trail=ball_trail,
+                )
+                if writer is None:
+                    height, width = preview.shape[:2]
+                    writer = cv2.VideoWriter(
+                        str(args.output_video),
+                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        output_fps,
+                        (width, height),
+                    )
+                    if not writer.isOpened():
+                        raise RuntimeError(f"Could not create output video: {args.output_video}")
+                writer.write(preview)
+                for event in result.events:
+                    events_file.write(event.model_dump_json() + "\n")
+                if ball_event is not None:
+                    events_file.write(ball_event.model_dump_json() + "\n")
+                    event_count += 1
+                    ball_observation_count += 1
+                    interpolated_ball_count += int(ball_event.is_interpolated)
+                frame_count += 1
+                event_count += len(result.events)
+    finally:
+        if writer is not None:
+            writer.release()
+
+    elapsed_seconds = perf_counter() - started_at
+    summary = {
+        "video": str(args.video),
+        "output_video": str(args.output_video),
+        "output_events": str(args.output_events),
+        "frames_processed": frame_count,
+        "events_written": event_count,
+        "ball_observations": ball_observation_count,
+        "interpolated_ball_observations": interpolated_ball_count,
+        "track_switches": pipeline.tracker.track_switch_count,
+        "processing_fps": frame_count / elapsed_seconds if elapsed_seconds else 0,
+    }
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def main() -> None:
     args = build_parser().parse_args()
     if args.command == "process-video":
         raise SystemExit(process_video(args))
+    if args.command in {"track-video", "track-players"}:
+        raise SystemExit(track_players(args))

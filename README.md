@@ -2,8 +2,14 @@
 
 CourtVision maps points from recorded tennis footage onto a normalized court.
 
-Right now, the project can read MP4 and MOV files, load four manually selected court corners,
-calculate a homography, and generate a side-by-side calibration preview.
+Right now, the project can calibrate a court, detect the two active players and tennis ball,
+and map their movement onto a normalized court.
+
+## Demo
+
+[![CourtVision tracking demo](assets/courtvision-demo.jpg)](assets/courtvision-demo.mp4)
+
+Click the preview to watch the tracked video.
 
 ## Requirements
 
@@ -23,7 +29,8 @@ make test
 
 1. Put a local clip at `data/sample/sample.mp4`.
 2. Copy `data/sample/calibration.example.json` to `data/sample/calibration.json`.
-3. Update the four pixel coordinates for the visible singles-court baseline corners.
+3. Set the clip's frame width and height, then update the four pixel coordinates for the
+   visible singles-court baseline corners.
 4. Run:
 
 ```bash
@@ -32,6 +39,18 @@ make process-video
 
 The preview is written to `data/processed/court_preview.png`. Videos, local calibration files,
 and generated output in these directories are ignored by Git.
+
+To track the players and ball:
+
+Download the TrackNet tennis weights to `models/tracknet-tennis.pt` from
+[Hugging Face](https://huggingface.co/vishnushenoy09/tracknet-v1-tennis/blob/main/model_best.pt),
+then run:
+
+```bash
+make track-video VIDEO=data/sample/sample.mov
+```
+
+This writes an annotated video and JSONL tracking events to `data/processed/`.
 
 To use different paths or a different starting time:
 
@@ -48,7 +67,10 @@ uv run courtvision process-video \
 ```text
 services/vision/src/courtvision/
 ├── court/           # calibration models and file loading
+├── ball/            # tennis-ball candidate detection
 ├── geometry/        # image/court perspective transforms
+├── players/         # person detection and active-player selection
+├── tracking/        # persistent tracks and event schemas
 ├── video/           # timestamp-aware frame ingestion
 └── visualization/   # normalized court and calibration previews
 ```
