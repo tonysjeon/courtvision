@@ -5,6 +5,12 @@ CourtVision maps points from recorded tennis footage onto a normalized court.
 Right now, the project can calibrate a court, detect the two active players and tennis ball,
 and map their movement onto a normalized court.
 
+## Demo
+
+[![CourtVision tracking demo](assets/courtvision-demo.jpg)](assets/courtvision-demo.mp4)
+
+Click the preview to watch the tracked video.
+
 ## Requirements
 
 - Python 3.11 through 3.14
