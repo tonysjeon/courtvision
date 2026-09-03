@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from courtvision.geometry.mapper import CourtMapper
 from courtvision.tracking.events import (
     BallTrackingEvent,
@@ -80,6 +81,25 @@ def test_smooths_noisy_observed_coordinates() -> None:
     middle = result[2]
     assert middle is not None
     assert middle.pixel_position.y < 26
+
+
+def test_uses_each_frames_camera_corrected_mapper() -> None:
+    frames = [TrajectoryFrame(index, index * 40) for index in range(3)]
+    events = [event(0, 10, 20), None, event(2, 30, 20)]
+    frame_mappers = [
+        CourtMapper(np.array([[1, 0, -offset], [0, 1, 0], [0, 0, 1]], dtype=float))
+        for offset in (0, 10, 20)
+    ]
+
+    result = smooth_ball_trajectory(
+        frames,
+        events,
+        CourtMapper(np.eye(3)),
+        frame_mappers=frame_mappers,
+    )
+
+    assert result[1] is not None
+    assert result[1].court_position.x == pytest.approx(10, abs=1)
 
 
 def test_ground_projection_ignores_airborne_depth_reversal() -> None:

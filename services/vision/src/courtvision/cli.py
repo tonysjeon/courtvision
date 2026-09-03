@@ -12,6 +12,7 @@ import cv2
 
 from courtvision.ball.tracknet import TrackNetBallDetector
 from courtvision.court.calibration import CourtCalibration
+from courtvision.geometry.camera_motion import CameraMotionCompensator
 from courtvision.geometry.mapper import CourtMapper
 from courtvision.pipeline import PlayerTrackingPipeline
 from courtvision.players.yolo import YoloPersonDetector
@@ -53,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     track.add_argument("--max-frames", type=int)
     track.add_argument("--start-ms", type=float, default=0.0)
     track.add_argument("--end-ms", type=float)
+    track.add_argument(
+        "--no-camera-motion",
+        action="store_true",
+        help="Disable per-frame compensation for broadcast pan and zoom.",
+    )
     return parser
 
 
@@ -93,6 +99,12 @@ def track_players(args: argparse.Namespace) -> int:
             frame_width=metadata_reader.metadata.width,
             frame_height=metadata_reader.metadata.height,
         )
+        reference_frame = next(iter(metadata_reader), None)
+    if reference_frame is None:
+        raise RuntimeError("No frame was available for camera calibration")
+    camera_motion = None
+    if not args.no_camera_motion:
+        camera_motion = CameraMotionCompensator(reference_frame.image, mapper)
     detector = YoloPersonDetector(
         args.model,
         confidence_threshold=args.confidence,
@@ -104,6 +116,7 @@ def track_players(args: argparse.Namespace) -> int:
         mapper=mapper,
         ball_detector=TrackNetBallDetector(args.ball_model, device=args.ball_device),
         ball_tracker=BallTracker(mapper),
+        camera_motion=camera_motion,
     )
 
     args.output_video.parent.mkdir(parents=True, exist_ok=True)
@@ -136,6 +149,7 @@ def track_players(args: argparse.Namespace) -> int:
         timeline,
         [result.ball_event for result in results],
         mapper,
+        frame_mappers=[result.mapper for result in results],
         player_events=[result.events for result in results],
     )
 

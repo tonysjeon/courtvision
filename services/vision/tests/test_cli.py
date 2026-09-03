@@ -19,3 +19,4 @@ def test_video_tracking_defaults() -> None:
     assert args.confidence == 0.2
     assert args.model == "yolo11n.pt"
     assert args.frame_skip == 0
+    assert not args.no_camera_motion

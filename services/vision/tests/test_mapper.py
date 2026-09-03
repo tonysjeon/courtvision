@@ -76,3 +76,11 @@ def test_scales_calibration_to_current_frame_dimensions() -> None:
 
     assert mapper.transform(200, 800) == pytest.approx((0, 0), abs=1e-5)
     assert mapper.transform(1400, 200) == pytest.approx((100, 100), abs=1e-5)
+
+
+def test_composes_current_frame_alignment_before_court_mapping() -> None:
+    mapper = CourtMapper(np.eye(3)).after_image_transform(
+        np.array([[1, 0, -20], [0, 1, 10], [0, 0, 1]], dtype=float)
+    )
+
+    assert mapper.transform(30, 40) == pytest.approx((10, 50))

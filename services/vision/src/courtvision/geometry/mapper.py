@@ -49,6 +49,13 @@ class CourtMapper:
     def inverse_transform(self, court_x: float, court_y: float) -> tuple[float, float]:
         return self._transform_point(court_x, court_y, self.court_to_image)
 
+    def after_image_transform(self, image_to_reference: np.ndarray) -> CourtMapper:
+        """Map current-frame pixels after aligning them to the calibrated reference frame."""
+        transform = np.asarray(image_to_reference, dtype=np.float64)
+        if transform.shape != (3, 3) or not np.isfinite(transform).all():
+            raise ValueError("Image transform must be a finite 3x3 matrix")
+        return CourtMapper(self.image_to_court @ transform)
+
     @staticmethod
     def _transform_point(x: float, y: float, matrix: np.ndarray) -> tuple[float, float]:
         point = np.array([[[x, y]]], dtype=np.float64)

@@ -145,3 +145,24 @@ def test_keeps_far_track_through_detector_depth_jitter() -> None:
     )
 
     assert first[0].track_id == second[0].track_id
+
+
+def test_default_far_depth_tracks_sustained_movement() -> None:
+    tracker = PlayerTracker(max_displacement_per_frame=20)
+    tracker.update(
+        match_id="match",
+        frame_id=0,
+        timestamp_ms=0,
+        candidates={"far_player": candidate("far_player", 0, 50, 90)},
+    )
+
+    events = []
+    for frame_id in range(1, 11):
+        events = tracker.update(
+            match_id="match",
+            frame_id=frame_id,
+            timestamp_ms=frame_id * 40,
+            candidates={"far_player": candidate("far_player", frame_id, 50, 100)},
+        )
+
+    assert events[0].court_position.y > 97

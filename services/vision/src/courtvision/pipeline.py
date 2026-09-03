@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from courtvision.ball.detection import BallCandidate, BallDetector
+from courtvision.geometry.camera_motion import CameraMotionCompensator
 from courtvision.geometry.mapper import CourtMapper
 from courtvision.players.detection import PersonDetection, PersonDetector
 from courtvision.players.filtering import ActivePlayerSelector, PlayerCandidate, PlayerId
@@ -16,6 +17,7 @@ from courtvision.video.reader import VideoFrame
 
 @dataclass(frozen=True, slots=True)
 class PlayerTrackingResult:
+    mapper: CourtMapper
     detections: list[PersonDetection]
     candidates: dict[PlayerId, PlayerCandidate]
     events: list[PlayerTrackingEvent]
@@ -34,6 +36,7 @@ class PlayerTrackingPipeline:
         tracker: PlayerTracker | None = None,
         ball_detector: BallDetector | None = None,
         ball_tracker: BallTracker | None = None,
+        camera_motion: CameraMotionCompensator | None = None,
     ) -> None:
         self.match_id = match_id
         self.detector = detector
@@ -42,10 +45,16 @@ class PlayerTrackingPipeline:
         self.tracker = tracker or PlayerTracker()
         self.ball_detector = ball_detector
         self.ball_tracker = ball_tracker
+        self.camera_motion = camera_motion
         if (ball_detector is None) != (ball_tracker is None):
             raise ValueError("ball_detector and ball_tracker must be provided together")
 
     def process(self, frame: VideoFrame) -> PlayerTrackingResult:
+        mapper = self.mapper
+        if self.camera_motion is not None:
+            mapper = self.camera_motion.mapper_for_frame(frame.image)
+            if self.ball_tracker is not None:
+                self.ball_tracker.mapper = mapper
         detections = self.detector.detect(
             frame.image,
             frame_id=frame.frame_id,
@@ -53,7 +62,7 @@ class PlayerTrackingPipeline:
         )
         candidates = self.selector.select(
             detections,
-            self.mapper,
+            mapper,
             self.tracker.previous_positions(frame.frame_id),
         )
         events = self.tracker.update(
@@ -87,6 +96,7 @@ class PlayerTrackingPipeline:
                 ):
                     ball_event = None
         return PlayerTrackingResult(
+            mapper=mapper,
             detections=detections,
             candidates=candidates,
             events=events,

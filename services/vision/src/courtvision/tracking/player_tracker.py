@@ -31,7 +31,7 @@ class PlayerTracker:
         near_player_smoothing: float = 0.35,
         near_player_vertical_smoothing: float = 0.08,
         far_player_smoothing: float = 0.35,
-        far_player_vertical_smoothing: float = 0.05,
+        far_player_vertical_smoothing: float = 0.12,
     ) -> None:
         if max_missing_frames < 0:
             raise ValueError("max_missing_frames must be non-negative")

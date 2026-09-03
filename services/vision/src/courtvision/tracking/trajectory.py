@@ -41,6 +41,7 @@ def smooth_ball_trajectory(
     events: list[BallTrackingEvent | None],
     mapper: CourtMapper,
     *,
+    frame_mappers: list[CourtMapper] | None = None,
     player_events: list[list[PlayerTrackingEvent]] | None = None,
     max_anchor_gap_ms: float = 600.0,
     acceleration_noise: float = 3500.0,
@@ -48,6 +49,8 @@ def smooth_ball_trajectory(
     """Estimate a continuous 2D path using observations before and after each frame."""
     if len(frames) != len(events):
         raise ValueError("frames and events must have the same length")
+    if frame_mappers is not None and len(frame_mappers) != len(frames):
+        raise ValueError("frame_mappers and frames must have the same length")
 
     anchors = [
         index
@@ -75,6 +78,7 @@ def smooth_ball_trajectory(
             segment_anchors,
             output,
             mapper,
+            frame_mappers=frame_mappers,
             acceleration_noise=acceleration_noise,
         )
         segment_start = anchor_offset
@@ -92,6 +96,7 @@ def _smooth_segment(
     output: list[BallTrackingEvent | None],
     mapper: CourtMapper,
     *,
+    frame_mappers: list[CourtMapper] | None,
     acceleration_noise: float,
 ) -> None:
     if not anchors:
@@ -205,7 +210,8 @@ def _smooth_segment(
     for offset, index in enumerate(range(start, end + 1)):
         pixel_x = float(smoothed_states[offset][0])
         pixel_y = float(smoothed_states[offset][1])
-        court_x, court_y = mapper.transform(pixel_x, pixel_y)
+        frame_mapper = mapper if frame_mappers is None else frame_mappers[index]
+        court_x, court_y = frame_mapper.transform(pixel_x, pixel_y)
         is_interpolated = index not in accepted_anchors
         confidence = anchor_confidences.get(index)
         if confidence is None:
