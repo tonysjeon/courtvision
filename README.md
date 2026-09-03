@@ -1,23 +1,31 @@
 # CourtVision
 
-CourtVision maps points from recorded tennis footage onto a normalized court.
+CourtVision tracks the two active players and the ball in tennis footage, then maps the
+rally onto a top-down court.
 
-Right now, the project can calibrate a court, detect the two active players and tennis ball,
-and map their movement onto a normalized court.
+This is an enhanced version of a UCLA Tennis Consulting project I led. It builds on that
+work with camera-aware court calibration, steadier player positioning, and estimated ball
+movement between frames.
 
 ## Demo
 
-[![CourtVision tracking demo](assets/courtvision-demo.jpg)](assets/courtvision-demo.mp4)
+![CourtVision tracking demo](assets/courtvision-demo.gif)
 
-Click the preview to watch the tracked video.
+The broadcast view shows the detections used by the tracker. The court view shows the same
+rally from above, including player movement and the ball's estimated path through the air.
 
-## Requirements
+## What it does
 
-- Python 3.11 through 3.14
-- [uv](https://docs.astral.sh/uv/)
-- An MP4 or MOV tennis clip
+- calibrates the visible court from four baseline corners
+- follows the near and far players as the broadcast camera moves
+- detects the tennis ball and fills short gaps using the surrounding frames
+- maps airborne shots and observed bounces onto a normalized court
+- exports an annotated video and frame-by-frame JSONL events
 
-## Setup
+## Development
+
+CourtVision requires Python 3.11 through 3.14 and
+[uv](https://docs.astral.sh/uv/). Install the project and run its checks with:
 
 ```bash
 make install
@@ -25,44 +33,17 @@ make lint
 make test
 ```
 
-## Try it
-
-1. Put a local clip at `data/sample/sample.mp4`.
-2. Copy `data/sample/calibration.example.json` to `data/sample/calibration.json`.
-3. Set the clip's frame width and height, then update the four pixel coordinates for the
-   visible singles-court baseline corners.
-4. Run:
+The pipeline accepts MP4 or MOV footage. Local clips and calibration files belong in
+`data/sample/`; generated videos and events are written to `data/processed/`.
 
 ```bash
 make process-video
-```
-
-The preview is written to `data/processed/court_preview.png`. Videos, local calibration files,
-and generated output in these directories are ignored by Git.
-
-To track the players and ball:
-
-Download the TrackNet tennis weights to `models/tracknet-tennis.pt` from
-[Hugging Face](https://huggingface.co/vishnushenoy09/tracknet-v1-tennis/blob/main/model_best.pt),
-then run:
-
-```bash
 make track-video VIDEO=data/sample/sample.mov
 ```
 
-This writes an annotated video and JSONL tracking events to `data/processed/`.
+Ball tracking uses TrackNet tennis weights at `models/tracknet-tennis.pt`.
 
-To use different paths or a different starting time:
-
-```bash
-uv run courtvision process-video \
-  --video /path/to/clip.mov \
-  --calibration /path/to/calibration.json \
-  --output data/processed/preview.png \
-  --start-ms 5000
-```
-
-## Layout
+## Project structure
 
 ```text
 services/vision/src/courtvision/
