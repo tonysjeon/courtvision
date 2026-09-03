@@ -160,6 +160,30 @@ def test_ground_projection_passes_through_observed_bounce() -> None:
     assert position.y == pytest.approx(25)
 
 
+def test_ground_projection_continues_a_clipped_final_shot() -> None:
+    frames = [TrajectoryFrame(index, index * 100) for index in range(9)]
+    depths = [100, 70, 30, 0, 30, 70, 100, 80, 60]
+    events = [event(index, 50, depth) for index, depth in enumerate(depths)]
+    players = [
+        [
+            player_event(index, "far_player", 40, 105),
+            player_event(index, "near_player", 60, -5),
+        ]
+        for index in range(9)
+    ]
+
+    result = smooth_ball_trajectory(
+        frames,
+        events,
+        CourtMapper(np.eye(3)),
+        player_events=players,
+    )
+
+    final = result[-1]
+    assert final is not None
+    assert final.court_position.y < 50
+
+
 def test_uses_recent_shot_direction_to_reduce_cross_track_noise() -> None:
     from courtvision.tracking.trajectory import _Measurement
 

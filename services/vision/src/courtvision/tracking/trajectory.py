@@ -377,6 +377,64 @@ def _project_segment_to_ground(
         event = ball_events[index]
         if event is not None:
             ball_events[index] = event.model_copy(update={"court_position": last_position})
+    _project_trailing_shot(
+        frames,
+        ball_events,
+        player_events,
+        anchors,
+        last_index,
+        end,
+        last_position,
+    )
+
+
+def _project_trailing_shot(
+    frames: list[TrajectoryFrame],
+    ball_events: list[BallTrackingEvent | None],
+    player_events: list[list[PlayerTrackingEvent]],
+    anchors: list[tuple[int, str, CourtPosition]],
+    start: int,
+    end: int,
+    start_position: CourtPosition,
+) -> None:
+    """Continue a clipped final shot without using airborne image height as depth."""
+    if len(anchors) < 2 or start >= end:
+        return
+
+    previous_index = anchors[-2][0]
+    expected_duration = frames[start].timestamp_ms - frames[previous_index].timestamp_ms
+    trailing_duration = frames[end].timestamp_ms - frames[start].timestamp_ms
+    if expected_duration <= 0 or trailing_duration > expected_duration * 1.25:
+        return
+
+    destination_id = "near_player" if anchors[-1][1] == "far_player" else "far_player"
+    for index in range(start + 1, end + 1):
+        event = ball_events[index]
+        if event is None:
+            continue
+        destination = next(
+            (
+                player
+                for player in player_events[index]
+                if player.object_id == destination_id
+            ),
+            None,
+        )
+        if destination is None:
+            continue
+        progress = min(
+            1.0,
+            (frames[index].timestamp_ms - frames[start].timestamp_ms) / expected_duration,
+        )
+        court_x = start_position.x + progress * (
+            destination.court_position.x - start_position.x
+        )
+        court_y = start_position.y + progress * (
+            destination.court_position.y - start_position.y
+        )
+        ball_events[index] = event.model_copy(
+            update={"court_position": CourtPosition(x=court_x, y=court_y)}
+        )
 
 
 def _interpolate_ground_path(

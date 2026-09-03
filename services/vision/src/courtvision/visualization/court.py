@@ -35,7 +35,7 @@ class _CourtLayout:
 
 def _court_layout(width: int, height: int) -> _CourtLayout:
     available_width = round(width * 0.68)
-    available_height = round(height * 0.68)
+    available_height = round(height * 0.66)
     doubles_width = min(
         available_width,
         round(available_height / DOUBLES_COURT_ASPECT_RATIO),
