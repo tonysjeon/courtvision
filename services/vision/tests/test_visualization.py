@@ -31,24 +31,24 @@ def test_draws_doubles_alleys_and_extended_net() -> None:
     surround = np.array(SURROUND_COLOR, dtype=np.uint8)
     court_blue = np.array(COURT_COLOR, dtype=np.uint8)
 
-    assert np.array_equal(court[200, 142], np.array([255, 255, 255]))
-    assert np.array_equal(court[200, 181], np.array([255, 255, 255]))
+    assert np.array_equal(court[200, 159], np.array([255, 255, 255]))
+    assert np.array_equal(court[200, 194], np.array([255, 255, 255]))
     assert np.array_equal(court[300, 250], court_blue)
     assert np.array_equal(court[300, 100], surround)
-    assert not np.array_equal(court[450, 130], surround)
-    assert np.array_equal(court[430, 130], surround)
+    assert not np.array_equal(court[450, 145], surround)
+    assert np.array_equal(court[430, 145], surround)
 
 
 def test_maps_normalized_positions_to_singles_corners() -> None:
-    assert court_position_to_canvas(0, 0, 600, 900) == (181, 792)
-    assert court_position_to_canvas(100, 100, 600, 900) == (419, 107)
+    assert court_position_to_canvas(0, 0, 600, 900) == (194, 755)
+    assert court_position_to_canvas(100, 100, 600, 900) == (406, 144)
 
 
 def test_uses_regulation_doubles_court_proportions() -> None:
     court = render_normalized_court(width=600, height=900)
     white = np.all(court == np.array([255, 255, 255], dtype=np.uint8), axis=2)
-    doubles_width = 458 - 142
-    court_length = 792 - 107
+    doubles_width = 441 - 159
+    court_length = 755 - 144
 
     assert court_length / doubles_width == pytest.approx(23.77 / 10.97, rel=0.01)
     assert np.any(white)
